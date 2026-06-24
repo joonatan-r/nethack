@@ -1,0 +1,25 @@
+diff --git a/src/files.c b/src/files.c
+index d03ad1071..f933ee5fa 100644
+--- a/src/files.c
++++ b/src/files.c
+@@ -92,6 +92,8 @@ const
+ static char fqn_filename_buffer[FQN_NUMBUF][FQN_MAX_FILENAME];
+ #endif
+
++static char savefilepath_buffer[8][FQN_MAX_FILENAME];
++
+ #if !defined(SAVE_EXTENSION)
+ #ifdef MICRO
+ #define SAVE_EXTENSION ".sav"
+@@ -358,6 +360,11 @@ fqname(const char *basenam,
+     char tmpbuf[BUFSZ];
+ #endif
+
++    if (whichprefix == SAVEPREFIX) {
++        Strcpy(savefilepath_buffer[buffnum], "/");
++        return strcat(savefilepath_buffer[buffnum], basenam);
++    }
++
+ #ifndef PREFIXES_IN_USE
+     return basenam;
+ #else
