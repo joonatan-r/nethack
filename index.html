@@ -106,6 +106,26 @@ document.onkeydown = e => {
     }
 };
 
+document.onmousedown = e => {
+    if (inputResolve) {
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+        const x = e.x - centerX;
+        const y = e.y - centerY;
+        let key = {
+            1: 'b',
+            2: 'j',
+            3: 'n',
+            4: 'h',
+            6: 'l',
+            7: 'y',
+            8: 'k',
+            9: 'u',
+        }[relativeCoordsToDrc(y, x)];
+        inputResolve(key.charCodeAt(0));
+    }
+};
+
 const msg = document.getElementById("msg");
 const root = document.getElementById("root");
 const menus = document.getElementById("menus");
@@ -293,9 +313,6 @@ async function callback(name, ...args) {
             while (key !== 13) {
                 key = await new Promise(r => { inputResolve = r; });
                 existingIdx = incSelectionsByMenu[id].indexOf(key);
-                console.log("\n\n");
-                console.log(String.fromCharCode(key));
-                console.log(existingIdx);
                 if (key === 27) {
                     incSelectionsByMenu[id] = [];
                     destroyMenu(args[0]);
@@ -305,9 +322,7 @@ async function callback(name, ...args) {
                 } else {
                     incSelectionsByMenu[id].push(key);
                 }
-                console.log(incSelectionsByMenu[id]);
                 updateMenuSelections(args[0], incSelectionsByMenu[id]);
-                console.log("\n\n");
                 if (args[1] === nethackGlobal.constants.MENU_SELECT.PICK_ONE) {
                     break;
                 }
@@ -506,6 +521,29 @@ function escapeHtml(str) {
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
+}
+
+function relativeCoordsToDrc(y, x) {
+    if (x === 0) {
+        if (y > 0) return 2; // b
+        return 8; // t
+    } else {
+        let val = y/x;
+
+        if (val > -0.4142 && val < 0.4142) {
+            if (x > 0) return 6; // r
+            return 4; // l
+        } else if (val > -2.4142 && val < -0.4142) {
+            if (x > 0) return 9; // tr
+            return 1; // bl
+        } else if (val > 0.4142 && val < 2.4142) {
+            if (x > 0) return 3; // br
+            return 7; // tl
+        } else {
+            if (y > 0) return 2; // b
+            return 8; // t
+        }
+    }
 }
 
   </script>
