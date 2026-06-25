@@ -68,7 +68,12 @@ let curs;
 const selectorsByMenu = {};
 const incSelectionsByMenu = {};
 const statusMap = {};
-let condsMap = {}
+let condsMap = {};
+let centerCb;
+const msg = document.getElementById("msg");
+const root = document.getElementById("root");
+const menus = document.getElementById("menus");
+const status = document.getElementById("status");
 
 document.onkeydown = e => {
     if (inputResolve) {
@@ -132,14 +137,19 @@ document.onmouseup = e => {
             9: 'u',
         }[relativeCoordsToDrc(y, x)];
         inputResolve(key.charCodeAt(0));
-        // TODO center visual view port
+        centerCb = () => {
+            if (curs) {
+                const rect = curs.getBoundingClientRect();
+                const cursX = rect.x + (rect.width / 2);
+                const cursY = rect.y + (rect.height / 2);
+                const prevMarginLeft = Number(root.style.marginLeft?.slice(0, -2));
+                const prevMarginTop = Number(root.style.marginTop?.slice(0, -2));
+                root.style.marginLeft = `${prevMarginLeft + (centerX - cursX)}px`;
+                root.style.marginTop = `${prevMarginTop + (centerY - cursY)}px`;
+            }
+        };
     }
 };
-
-const msg = document.getElementById("msg");
-const root = document.getElementById("root");
-const menus = document.getElementById("menus");
-const status = document.getElementById("status");
 
 for (let i = 0; i < rowno; i++) {
     for (let j = 0; j < colno; j++) {
@@ -226,6 +236,9 @@ async function callback(name, ...args) {
             curs = document.getElementById(`${args[1]}_${args[2]}`);
             curs.style.color = "black";
             curs.style.backgroundColor = "darkgreen";
+            if (centerCb) {
+                centerCb();
+            }
             return 0;
         case "shim_create_nhwindow":
             winCount++;
