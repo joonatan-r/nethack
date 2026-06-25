@@ -43,6 +43,7 @@
             font-size: 10px;
         }
         #footerMsg {
+            font-size: 16px;
             position: absolute;
             margin: 0;
             padding: 0;
@@ -180,7 +181,7 @@ if (mobile) {
     adjustFixedDivs();
     window.visualViewport.onresize = adjustFixedDivs;
     window.visualViewport.onscroll = adjustFixedDivs;
-    createMobileControls();
+    createMobileControls(0);
     root.onmouseup = e => {
         if (inputResolve) {
             const centerX = window.visualViewport.width / 2 + window.visualViewport.offsetLeft;
@@ -637,10 +638,18 @@ function centerIfMobile() {
     }
 }
 
-function createMobileControls() {
-    const chars = ['.', ',', 'p', 'y', 'n', 'q'];
+let shift = false;
+let ctrl = false;
 
-    for (const char of chars) {
+function createMobileControls(idx) {
+    const chars = [
+        ['Togl', 'Shift', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'],
+        ['Togl', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+        ['Togl', '.', ',', '>', '<', '#', ':', ';', '_', '?'],
+        ['Togl', 'Ctrl', 'Escape', 'Enter'],
+    ];
+    footer.innerHTML = "";
+    for (const char of chars[idx]) {
         const el = document.createElement("div");
         el.style.display = "flex";
         el.style.flexDirection = "column";
@@ -651,7 +660,20 @@ function createMobileControls() {
         el.style.aspectRatio = "1 / 1";
         el.style.border = "1px solid lightgray";
         el.innerHTML = char;
-        el.onclick = () => handleKey(char, false);
+        el.onclick = () => {
+            if (char === 'Togl') {
+                createMobileControls(idx === chars.length - 1 ? 0 : idx + 1);
+            } else if (char === 'Shift') {
+                shift = !shift;
+                el.style.backgroundColor = shift ? "#333" : "";
+            } else if (char === 'Ctrl') {
+                ctrl = !ctrl;
+                el.style.backgroundColor = ctrl ? "#333" : "";
+            } else {
+                const inputChar = (shift && char.length === 1) ? char.toUpperCase() : char;
+                handleKey(inputChar, ctrl);
+            }
+        };
         footer.appendChild(el);
     }
 }
