@@ -58,13 +58,15 @@
             overflow-x: auto;
             overflow-y: hidden;
             overscroll-behavior: contain;
+            display: flex;
+            flex-direction: row;
         }
     </style>
   </head>
   <body>
     <div id="header"></div>
     <div id="footerMsg"></div>
-    <div id="footer">bbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabb</div>
+    <div id="footer"></div>
     <div id="container">
         <div id="status"></div>
         <div id="root"></div>
@@ -101,7 +103,6 @@ const selectorsByMenu = {};
 const incSelectionsByMenu = {};
 const statusMap = {};
 let condsMap = {};
-let centerCb;
 let msg = document.getElementById("msg");
 const root = document.getElementById("root");
 let menus = document.getElementById("menus");
@@ -110,18 +111,18 @@ const header = document.getElementById("header");
 const footer = document.getElementById("footer");
 const footerMsg = document.getElementById("footerMsg");
 
-document.onkeydown = e => {
+function handleKey(inputKey, ctrlKey) {
     if (inputResolve) {
         if (isCmdInput) {
-            if (e.key === 'Enter') {
+            if (inputKey === 'Enter') {
                 inputResolve(getExtCmdIdx(cmdInput));
-            } else if (e.key === 'Escape') {
+            } else if (inputKey === 'Escape') {
                 inputResolve(-1);
-            } else if (e.key.length === 1) {
-                cmdInput += e.key;
+            } else if (inputKey.length === 1) {
+                cmdInput += inputKey;
                 msg.innerHTML = "#" + cmdInput;
             }
-        } else if (e.key.length === 1) {
+        } else if (inputKey.length === 1) {
             let key = {
                 1: 'b',
                 2: 'j',
@@ -131,9 +132,9 @@ document.onkeydown = e => {
                 7: 'y',
                 8: 'k',
                 9: 'u',
-            }[e.key] || e.key;
+            }[inputKey] || inputKey;
             let code = key.charCodeAt(0);
-            if (e.ctrlKey) {
+            if (ctrlKey) {
                 code -= 96;
             }
             inputResolve(code);
@@ -149,11 +150,11 @@ document.onkeydown = e => {
                 Home: 'Y'.charCodeAt(0),
                 ArrowUp: 'K'.charCodeAt(0),
                 PageUp: 'U'.charCodeAt(0)
-            }[e.key];
+            }[inputKey];
             key && inputResolve(key);
         }
     }
-};
+}
 
 if (mobile) {
     msg = footerMsg;
@@ -178,7 +179,8 @@ if (mobile) {
     adjustFixedDivs();
     window.visualViewport.onresize = adjustFixedDivs;
     window.visualViewport.onscroll = adjustFixedDivs;
-    document.onmouseup = e => {
+    createMobileControls();
+    root.onmouseup = e => {
         if (inputResolve) {
             const centerX = window.visualViewport.width / 2 + window.visualViewport.offsetLeft;
             const centerY = window.visualViewport.height / 2 + window.visualViewport.offsetTop;
@@ -195,23 +197,13 @@ if (mobile) {
                 9: 'u',
             }[relativeCoordsToDrc(y, x)];
             inputResolve(key.charCodeAt(0));
-            centerCb = () => {
-                if (curs) {
-                    const rect = curs.getBoundingClientRect();
-                    const cursX = rect.x + (rect.width / 2);
-                    const cursY = rect.y + (rect.height / 2);
-                    const prevMarginLeft = Number(root.style.marginLeft?.slice(0, -2));
-                    const prevMarginTop = Number(root.style.marginTop?.slice(0, -2));
-                    root.style.marginLeft = `${prevMarginLeft + (centerX - cursX)}px`;
-                    root.style.marginTop = `${prevMarginTop + (centerY - cursY)}px`;
-                }
-            };
         }
     };
 } else {
     header.style.display = "none";
     footerMsg.style.display = "none";
     footer.style.display = "none";
+    document.onkeydown = e => handleKey(e.key, e.ctrlKey);
 }
 
 for (let i = 0; i < rowno; i++) {
@@ -299,9 +291,7 @@ async function callback(name, ...args) {
             curs = document.getElementById(`${args[1]}_${args[2]}`);
             curs.style.color = "black";
             curs.style.backgroundColor = "darkgreen";
-            if (centerCb) {
-                centerCb();
-            }
+            center();
             return 0;
         case "shim_create_nhwindow":
             winCount++;
@@ -629,6 +619,39 @@ function relativeCoordsToDrc(y, x) {
             if (y > 0) return 2; // b
             return 8; // t
         }
+    }
+}
+
+function center() {
+    if (curs) {
+        const centerX = window.visualViewport.width / 2 + window.visualViewport.offsetLeft;
+        const centerY = window.visualViewport.height / 2 + window.visualViewport.offsetTop;
+        const rect = curs.getBoundingClientRect();
+        const cursX = rect.x + (rect.width / 2);
+        const cursY = rect.y + (rect.height / 2);
+        const prevMarginLeft = Number(root.style.marginLeft?.slice(0, -2));
+        const prevMarginTop = Number(root.style.marginTop?.slice(0, -2));
+        root.style.marginLeft = `${prevMarginLeft + (centerX - cursX)}px`;
+        root.style.marginTop = `${prevMarginTop + (centerY - cursY)}px`;
+    }
+}
+
+function createMobileControls() {
+    const chars = ['.', ',', 'p', 'y', 'n', 'q'];
+
+    for (const char of chars) {
+        const el = document.createElement("div");
+        el.style.display = "flex";
+        el.style.flexDirection = "column";
+        el.style.justifyContent = "center";
+        el.style.alignItems = "center";
+        el.style.padding = "10px";
+        el.style.margin = "5px";
+        el.style.aspectRatio = "1 / 1";
+        el.style.border = "1px solid lightgray";
+        el.innerHTML = char;
+        el.onclick = () => handleKey(char, false);
+        footer.appendChild(el);
     }
 }
 
