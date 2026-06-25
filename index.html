@@ -7,12 +7,19 @@
         * {
             touch-action: manipulation;
         }
+        html {
+            position: relative;
+            min-height: 100%;
+            height: 100%;
+        }
         body {
             background-color: black;
             color: white;
             font-family: Courier, monospace;
             font-size: 20px;
             user-select: none;
+            margin: 0;
+            padding: 0;
         }
         #root div {
             float: left;
@@ -26,16 +33,39 @@
             display: flex;
             flex-direction: column;
         }
-        /* #kbInput {
-            color: transparent;
-            height: 50px;
-            width: 50px
-        } */
+        #header {
+            position: absolute;
+            margin: 0;
+            padding: 0;
+            border: 1px solid lightgray;
+            overflow: auto;
+            overscroll-behavior: contain;
+            font-size: 10px;
+        }
+        #footerMsg {
+            position: absolute;
+            margin: 0;
+            padding: 0;
+            border: 1px solid lightgray;
+            overflow: auto;
+            overscroll-behavior: contain;
+        }
+        #footer {
+            position: absolute;
+            margin: 0;
+            padding: 0;
+            border: 1px solid lightgray;
+            overflow-x: auto;
+            overflow-y: hidden;
+            overscroll-behavior: contain;
+        }
     </style>
   </head>
   <body>
+    <div id="header"></div>
+    <div id="footerMsg"></div>
+    <div id="footer">bbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabb</div>
     <div id="container">
-        <!-- <div id="kb"><input id="kbInput" /></div> -->
         <div id="status"></div>
         <div id="root"></div>
         <div id="msg"></div>
@@ -54,6 +84,8 @@
 
 import factory from "./wasm/nethack.js";
 
+let mobile = false;
+
 let synced = false;
 let syncResolve;
 const syncPromise = new Promise(r => { syncResolve = r; });
@@ -70,10 +102,13 @@ const incSelectionsByMenu = {};
 const statusMap = {};
 let condsMap = {};
 let centerCb;
-const msg = document.getElementById("msg");
+let msg = document.getElementById("msg");
 const root = document.getElementById("root");
-const menus = document.getElementById("menus");
-const status = document.getElementById("status");
+let menus = document.getElementById("menus");
+let status = document.getElementById("status");
+const header = document.getElementById("header");
+const footer = document.getElementById("footer");
+const footerMsg = document.getElementById("footerMsg");
 
 document.onkeydown = e => {
     if (inputResolve) {
@@ -120,36 +155,64 @@ document.onkeydown = e => {
     }
 };
 
-document.onmouseup = e => {
-    if (inputResolve) {
-        const centerX = window.visualViewport.width / 2 + window.visualViewport.offsetLeft;
-        const centerY = window.visualViewport.height / 2 + window.visualViewport.offsetTop;
-        const x = e.x - centerX;
-        const y = e.y - centerY;
-        let key = {
-            1: 'b',
-            2: 'j',
-            3: 'n',
-            4: 'h',
-            6: 'l',
-            7: 'y',
-            8: 'k',
-            9: 'u',
-        }[relativeCoordsToDrc(y, x)];
-        inputResolve(key.charCodeAt(0));
-        centerCb = () => {
-            if (curs) {
-                const rect = curs.getBoundingClientRect();
-                const cursX = rect.x + (rect.width / 2);
-                const cursY = rect.y + (rect.height / 2);
-                const prevMarginLeft = Number(root.style.marginLeft?.slice(0, -2));
-                const prevMarginTop = Number(root.style.marginTop?.slice(0, -2));
-                root.style.marginLeft = `${prevMarginLeft + (centerX - cursX)}px`;
-                root.style.marginTop = `${prevMarginTop + (centerY - cursY)}px`;
-            }
-        };
+if (mobile) {
+    msg = footerMsg;
+    menus = footerMsg;
+    status = header;
+    function adjustFixedDivs() {
+        const { offsetTop, offsetLeft, height, width, scale } = window.visualViewport;
+        header.style.top = `${offsetTop}px`;
+        header.style.left = `${offsetLeft}px`;
+        header.style.height = `${height * 0.1}px`;
+        header.style.width = `${width * 0.98}px`;
+        footerMsg.style.top = `${(offsetTop + (height * 0.74))}px`;
+        footerMsg.style.left = `${offsetLeft}px`;
+        footerMsg.style.height = `${height * 0.15}px`;
+        footerMsg.style.width = `${width * 0.98}px`;
+        footer.style.top = `${(offsetTop + (height * 0.89))}px`;
+        footer.style.left = `${offsetLeft}px`;
+        footer.style.height = `${height * 0.1}px`;
+        footer.style.width = `${width * 0.98}px`;
     }
-};
+
+    adjustFixedDivs();
+    window.visualViewport.onresize = adjustFixedDivs;
+    window.visualViewport.onscroll = adjustFixedDivs;
+    document.onmouseup = e => {
+        if (inputResolve) {
+            const centerX = window.visualViewport.width / 2 + window.visualViewport.offsetLeft;
+            const centerY = window.visualViewport.height / 2 + window.visualViewport.offsetTop;
+            const x = e.x - centerX;
+            const y = e.y - centerY;
+            let key = {
+                1: 'b',
+                2: 'j',
+                3: 'n',
+                4: 'h',
+                6: 'l',
+                7: 'y',
+                8: 'k',
+                9: 'u',
+            }[relativeCoordsToDrc(y, x)];
+            inputResolve(key.charCodeAt(0));
+            centerCb = () => {
+                if (curs) {
+                    const rect = curs.getBoundingClientRect();
+                    const cursX = rect.x + (rect.width / 2);
+                    const cursY = rect.y + (rect.height / 2);
+                    const prevMarginLeft = Number(root.style.marginLeft?.slice(0, -2));
+                    const prevMarginTop = Number(root.style.marginTop?.slice(0, -2));
+                    root.style.marginLeft = `${prevMarginLeft + (centerX - cursX)}px`;
+                    root.style.marginTop = `${prevMarginTop + (centerY - cursY)}px`;
+                }
+            };
+        }
+    };
+} else {
+    header.style.display = "none";
+    footerMsg.style.display = "none";
+    footer.style.display = "none";
+}
 
 for (let i = 0; i < rowno; i++) {
     for (let j = 0; j < colno; j++) {
