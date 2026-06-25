@@ -86,7 +86,7 @@
 
 import factory from "./wasm/nethack.js";
 
-let mobile = false;
+let mobile = !document.location.href.endsWith("#pc");
 
 let synced = false;
 let syncResolve;
@@ -160,6 +160,7 @@ if (mobile) {
     msg = footerMsg;
     menus = footerMsg;
     status = header;
+    document.body.style.position = "fixed";
     function adjustFixedDivs() {
         const { offsetTop, offsetLeft, height, width, scale } = window.visualViewport;
         header.style.top = `${offsetTop}px`;
@@ -291,7 +292,7 @@ async function callback(name, ...args) {
             curs = document.getElementById(`${args[1]}_${args[2]}`);
             curs.style.color = "black";
             curs.style.backgroundColor = "darkgreen";
-            center();
+            centerIfMobile();
             return 0;
         case "shim_create_nhwindow":
             winCount++;
@@ -622,8 +623,8 @@ function relativeCoordsToDrc(y, x) {
     }
 }
 
-function center() {
-    if (curs) {
+function centerIfMobile() {
+    if (mobile && curs) {
         const centerX = window.visualViewport.width / 2 + window.visualViewport.offsetLeft;
         const centerY = window.visualViewport.height / 2 + window.visualViewport.offsetTop;
         const rect = curs.getBoundingClientRect();
