@@ -100,6 +100,7 @@ let cmdInput = "";
 const rowno = 21;
 const colno = 80;
 let curs;
+const colorsByCoords = {};
 const selectorsByMenu = {};
 const incSelectionsByMenu = {};
 const statusMap = {};
@@ -282,12 +283,30 @@ async function callback(name, ...args) {
             //     uint32 framecolor;
             //     glyph_map gm;
             // } glyph_info;
+            // typedef struct glyph_map_entry {
+            //     unsigned glyphflags;
+            //     struct classic_representation sym;
+            //     uint32 customcolor;
+            //     uint16 color256idx;
+            //     short int tileidx;
+            // #ifdef ENHANCED_SYMBOLS
+            //     struct unicode_representation *u;
+            // #endif
+            // } glyph_map;
+            // struct classic_representation {
+            //     int color;
+            //     int symidx;
+            // };
             const c = String.fromCharCode(Module.getValue(args[3] + 4, 'i32'));
             document.getElementById(`${x}_${y}`).innerHTML = c;
+            // structs within structs are as is in memory, not as pointer
+            const color = getColor(Module.getValue(args[3] + 16, 'i32'));
+            document.getElementById(`${x}_${y}`).style.color = color;
+            colorsByCoords[`${x}_${y}`] = color;
             return 0;
         case "shim_curs":
             if (curs) {
-                curs.style.color = "";
+                curs.style.color = colorsByCoords[curs.id] || "";
                 curs.style.backgroundColor = "";
             }
             curs = document.getElementById(`${args[1]}_${args[2]}`);
@@ -590,6 +609,28 @@ function getMenuSelect(window, how, selected, incomingSelections) {
     }
     Module.setValue(selected, ptr, '*');
     return validSelections.length;
+}
+
+function getColor(colorIdx) {
+    const color = nethackGlobal.constants.COLORS[colorIdx];
+    return {
+        CLR_BLACK: "#777",
+        CLR_BLUE: "blue",
+        CLR_BRIGHT_BLUE: "lightblue",
+        CLR_BRIGHT_CYAN: "lightcyan",
+        CLR_BRIGHT_GREEN: "lightgreen",
+        CLR_BRIGHT_MAGENTA: "hotpink",
+        CLR_BROWN: "saddlebrown",
+        CLR_CYAN: "cyan",
+        CLR_GRAY: "lightgray",
+        CLR_GREEN: "green",
+        CLR_MAGENTA: "magenta",
+        CLR_ORANGE: "orange",
+        CLR_RED: "red",
+        CLR_WHITE: "white",
+        CLR_YELLOW: "yellow"
+    }[color] || "";
+
 }
 
 function escapeHtml(str) {
