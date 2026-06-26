@@ -100,6 +100,7 @@ let cmdInput = "";
 const rowno = 21;
 const colno = 80;
 let curs;
+let cursColor = "darkgreen";
 const colorsByCoords = {};
 const selectorsByMenu = {};
 const incSelectionsByMenu = {};
@@ -312,7 +313,7 @@ async function callback(name, ...args) {
             }
             curs = document.getElementById(`${args[1]}_${args[2]}`);
             curs.style.color = "black";
-            curs.style.backgroundColor = "darkgreen";
+            curs.style.backgroundColor = cursColor;
             centerIfMobile();
             return 0;
         case "shim_create_nhwindow":
@@ -533,6 +534,19 @@ function updateStatus(args) {
         if (condsMap[cond]) {
             status.innerHTML += `${cond} `;
         }
+    }
+    if (curs && statusMap["Hpmax"]) {
+        const healthPercent = Number(statusMap["Hp"]) / Number(statusMap["Hpmax"]);
+        if (healthPercent > 0.75) {
+            curs.style.backgroundColor = "darkgreen";
+        } else if (healthPercent > 0.5) {
+            curs.style.backgroundColor = "yellow";
+        } else if (healthPercent > 0.25) {
+            curs.style.backgroundColor = "orange";
+        } else {
+            curs.style.backgroundColor = "red";
+        }
+        cursColor = curs.style.backgroundColor;
     }
 }
 
