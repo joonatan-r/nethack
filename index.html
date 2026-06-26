@@ -78,17 +78,14 @@
   <script type="module" src="./wasm/nethack.js"></script>
   <script type="module">
 
-// note: for save to work also had to add
-// if (whichprefix == SAVEPREFIX) {
-//     Strcpy(savefilepath_buffer[buffnum], "/");
-//     return strcat(savefilepath_buffer[buffnum], basenam);
-// }
-// to fqname in files.c
-
 import factory from "./wasm/nethack.js";
 
 let mobile = !document.location.href.endsWith("#pc");
 
+let lockCamera = true;
+let keepKb = false;
+let resizeFromBlur = false;
+let rootBaseMarginTop = 0;
 let synced = false;
 let syncResolve;
 const syncPromise = new Promise(r => { syncResolve = r; });
@@ -178,6 +175,16 @@ if (mobile) {
         footer.style.left = `${offsetLeft}px`;
         footer.style.height = `${height * 0.1}px`;
         footer.style.width = `${width * 0.98}px`;
+        rootBaseMarginTop = offsetTop + height * 0.1;
+        if (lockCamera) {
+            // skip one center from resize event if keepKb is on to reduce flickering,
+            // this will get center by shim_curs if moving
+            if (resizeFromBlur) {
+                resizeFromBlur = false;
+                return;
+            }
+            centerIfMobile();
+        }
     }
 
     adjustFixedDivs();
@@ -697,15 +704,36 @@ function centerIfMobile() {
 let shift = false;
 let ctrl = false;
 
+// TODO maybe just create custom soft keyboard instead of all focus/blur/resize pain
 function createMobileControls(idx) {
-    const chars = [
-        ['Togl', 'Shift', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'],
-        ['Togl', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
-        ['Togl', '.', ',', '>', '<', '#', ':', ';', '_', '?'],
-        ['Togl', 'Ctrl', 'Escape', 'Enter'],
-    ];
+    const chars = ['Kb', 'Ctrl', 'Escape', 'Enter', 'KeepKb', 'CmrLck', 'CmrRst'];
     footer.innerHTML = "";
-    for (const char of chars[idx]) {
+    for (const char of chars) {
+        if (char === 'Kb') {
+            const el = document.createElement("input");
+            el.type = "text";
+            el.placeholder = "Kb";
+            el.autocapitalize = "off";
+            el.autocorrect = "off";
+            el.style.color = "transparent";
+            el.style.backgroundColor = "black";
+            el.style.width = "50px";
+            el.style.padding = "10px";
+            el.style.margin = "5px";
+            el.style.border = "1px solid lightgray";
+            el.oninput = e => {
+                handleKey(e.data, ctrl);
+                el.value = "";
+            };
+            el.onblur = () => {
+                if (keepKb) {
+                    resizeFromBlur = true;
+                    el.focus();
+                }
+            };
+            footer.appendChild(el);
+            continue;
+        }
         const el = document.createElement("div");
         el.style.display = "flex";
         el.style.flexDirection = "column";
@@ -715,16 +743,27 @@ function createMobileControls(idx) {
         el.style.margin = "5px";
         el.style.aspectRatio = "1 / 1";
         el.style.border = "1px solid lightgray";
+        el.style.backgroundColor = (char === 'CmrLck') ? "#333" : "black";
         el.innerHTML = char;
-        el.onclick = () => {
-            if (char === 'Togl') {
-                createMobileControls(idx === chars.length - 1 ? 0 : idx + 1);
-            } else if (char === 'Shift') {
+        el.onmousedown = () => {
+            if (char === 'Shift') {
                 shift = !shift;
-                el.style.backgroundColor = shift ? "#333" : "";
+                el.style.backgroundColor = shift ? "#333" : "black";
             } else if (char === 'Ctrl') {
                 ctrl = !ctrl;
-                el.style.backgroundColor = ctrl ? "#333" : "";
+                el.style.backgroundColor = ctrl ? "#333" : "black";
+            } else if (char === 'KeepKb') {
+                keepKb = !keepKb;
+                el.style.backgroundColor = keepKb ? "#333" : "black";
+            } else if (char === 'CmrRst') {
+                root.style.marginLeft = 0;
+                root.style.marginTop = rootBaseMarginTop;
+            } else if (char === 'CmrLck') {
+                lockCamera = !lockCamera;
+                el.style.backgroundColor = lockCamera ? "#333" : "black";
+                if (lockCamera) {
+                    centerIfMobile();
+                }
             } else {
                 const inputChar = (shift && char.length === 1) ? char.toUpperCase() : char;
                 handleKey(inputChar, ctrl);
