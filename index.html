@@ -459,6 +459,9 @@ function clearMap() {
                 e.innerHTML = "";
             }
         }
+        if (curs) {
+            curs.style.backgroundColor = "";
+        }
     }
 }
 
@@ -572,30 +575,28 @@ function addMenuMobile(args) {
         incSelectionsByMenu[id].push(selector.charCodeAt(0));
     }
     windows.find(w => w.id === args[0]).selections[selector] = args[2];
-    menuText.innerHTML += "\n" + selector + separator + escapeHtml(args[7]);
-    selector && addDialogOption(selector, menu);
+    const text = selector + separator + escapeHtml(args[7]);
+    selector && addDialogOption(selector, text, menu);
 }
 
 function updateMenuSelectionsMobile(windowId, incomingSelections) {
-    const id = `menu_${windowId}_text`;
-    const menuText = document.getElementById(id);
-    if (!menuText) {
+    const id = `menu_${windowId}`;
+    const menu = document.getElementById(id);
+    if (!menu) {
         return;
     }
-    let text = menuText.innerHTML;
-    let newText = "";
-    const lines = text.split("\n");
-    lines.shift(); // remove start empty line
-    for (const line of lines) {
-        if (line.substring(1, 4) !== " + " && line.substring(1, 4) !== " - ") {
-            newText += "\n" + line;
-        }else if (incomingSelections.includes(line.charCodeAt(0))) {
-            newText += "\n" + line.charAt(0) + " + " + line.substring(4);
+    const options = Array.from(menu.children)
+        .filter(el => !el.id.endsWith("_text") && el.innerHTML !== 'Enter' && el.innerHTML !== 'Escape');
+    for (const option of options) {
+        let text = option.innerHTML;
+        let newText = "";
+        if (incomingSelections.includes(text.charCodeAt(0))) {
+            newText += text.charAt(0) + " + " + text.substring(4);
         } else {
-            newText += "\n" + line.charAt(0) + " - " + line.substring(4);
+            newText += text.charAt(0) + " - " + text.substring(4);
         }
+        option.innerHTML = newText;
     }
-    menuText.innerHTML = newText;
 }
 
 function updateStatus(args) {
@@ -886,13 +887,13 @@ function openDialog(windowId) {
         dialog.style.display = "";
         dialogOn = true;
         for (const option of ['Enter', 'Escape']) {
-            addDialogOption(option, menu);
+            addDialogOption(option, option, menu);
         }
         adjustFixedDivs();
     }
 }
 
-function addDialogOption(option, menu) {
+function addDialogOption(option, text, menu) {
     const el = document.createElement("div");
     el.style.border = "1px solid lightgray";
     el.style.backgroundColor = "black";
@@ -902,9 +903,8 @@ function addDialogOption(option, menu) {
     el.style.alignItems = "start";
     el.style.padding = "10px";
     el.style.margin = "5px";
-    el.innerHTML = option;
+    el.innerHTML = text;
     el.onclick = () => {
-        console.log(option)
         handleKey(option, false);
     };
     menu.appendChild(el);
