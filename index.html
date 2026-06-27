@@ -421,8 +421,8 @@ async function callback(name, ...args) {
                 openDialog(args[0]);
             }
             const incomingSelections = await selectMenu(args);
-            if (incomingSelections === -1) {
-                return -1;
+            if (incomingSelections === -1 || incomingSelections === 0) {
+                return incomingSelections;
             }
             return getMenuSelect(args[0], args[1], args[2], incomingSelections);
         case "shim_end_menu":
@@ -498,6 +498,7 @@ function addMenu(args) {
             selector = "a";
             selectorsByMenu[id] = [selector];
         } else {
+            // TODO fix if more items than char codes can handle
             selector = String.fromCharCode(selectorsByMenu[id][0].charCodeAt(0) + 1);
             selectorsByMenu[id].unshift(selector);
         }
@@ -574,9 +575,15 @@ function addMenuMobile(args) {
         }
         incSelectionsByMenu[id].push(selector.charCodeAt(0));
     }
-    windows.find(w => w.id === args[0]).selections[selector] = args[2];
+    if (selector !== "") {
+        windows.find(w => w.id === args[0]).selections[selector] = args[2];
+    }
     const text = selector + separator + escapeHtml(args[7]);
-    selector && addDialogOption(selector, text, menu);
+    if (selector) {
+        addDialogOption(selector, text, menu);
+    } else {
+        menuText.innerHTML += "\n" + text;
+    }
 }
 
 function updateMenuSelectionsMobile(windowId, incomingSelections) {
@@ -677,8 +684,11 @@ async function selectMenu(args) {
     }
     let existingIdx = -1;
     let key;
-    while (key !== 13) {
+    while (true) {
         key = await new Promise(r => { inputResolve = r; });
+        if (key === 13) {
+            break;
+        }
         existingIdx = incSelectionsByMenu[id].indexOf(key);
         if (key === 27) {
             incSelectionsByMenu[id] = [];
@@ -960,20 +970,20 @@ function createKb(idx = 0) {
         [
             ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
             ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
-            ['Shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm'],
-            ['Kb', 'Ctrl', 'Sym', 'Spc', 'Esc', 'Entr']
+            ['Ctrl', 'Shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm'],
+            ['Kb', 'Sym', 'Spc', 'Esc', 'Entr']
         ],
         [
             ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
             ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
-            ['Shift', 'Z', 'X', 'C', 'V', 'B', 'N', 'M'],
-            ['Kb', 'Ctrl', 'Sym', 'Spc', 'Esc', 'Entr']
+            ['Ctrl', 'Shift', 'Z', 'X', 'C', 'V', 'B', 'N', 'M'],
+            ['Kb', 'Sym', 'Spc', 'Esc', 'Entr']
         ],
         [
             ['`', '\\', '$', '=', '/', '_', '<', '>', '[', ']'],
             ['!', '@', '#', '?', '%', '^', '&', '*', '(', ')'],
-            ['123', '-', '\'', '"', ':', ';', ',', '.'],
-            ['Kb', 'Ctrl', 'abc', 'Spc', 'Esc', 'Entr']
+            ['Ctrl', '123', '-', '\'', '"', ':', ';', ',', '.'],
+            ['Kb', 'abc', 'Spc', 'Esc', 'Entr']
         ],
         [
             ['7', '8', '9'],
