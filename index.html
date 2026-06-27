@@ -62,12 +62,26 @@
             display: flex;
             flex-direction: row;
         }
+        #dialog {
+            position: absolute;
+            margin: 0;
+            padding: 0;
+            border: 1px solid lightgray;
+            overflow: scroll;
+            overscroll-behavior: contain;
+            font-size: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
     </style>
   </head>
   <body>
     <div id="header"></div>
     <div id="footerMsg"></div>
     <div id="footer"></div>
+    <div id="dialog"></div>
     <div id="container">
         <div id="status"></div>
         <div id="root"></div>
@@ -81,8 +95,10 @@
 import factory from "./wasm/nethack.js";
 
 let mobile = !document.location.href.endsWith("#pc");
-
-let kbOn = false;
+let mobileKbOn = true;
+let shift = false;
+let ctrl = false;
+let dialogOn = false;
 let lockCamera = true;
 let rootBaseMarginTop = 0;
 let footerHeight = 0;
@@ -110,8 +126,9 @@ let status = document.getElementById("status");
 const header = document.getElementById("header");
 const footer = document.getElementById("footer");
 const footerMsg = document.getElementById("footerMsg");
+const dialog = document.getElementById("dialog");
 
-function handleKey(inputKey, ctrlKey) {
+function handleKey(inputKey, ctrlKey, numPad) {
     if (inputResolve) {
         if (isCmdInput) {
             if (inputKey === 'Enter') {
@@ -123,7 +140,7 @@ function handleKey(inputKey, ctrlKey) {
                 msg.innerHTML = "#" + cmdInput;
             }
         } else if (inputKey.length === 1) {
-            let key = {
+            let key = (numPad && {
                 1: 'b',
                 2: 'j',
                 3: 'n',
@@ -132,7 +149,7 @@ function handleKey(inputKey, ctrlKey) {
                 7: 'y',
                 8: 'k',
                 9: 'u',
-            }[inputKey] || inputKey;
+            }[inputKey]) || inputKey;
             let code = key.charCodeAt(0);
             if (ctrlKey) {
                 code -= 96;
@@ -158,15 +175,14 @@ function handleKey(inputKey, ctrlKey) {
 
 if (mobile) {
     msg = footerMsg;
-    menus = footerMsg;
+    menus = dialog;
     status = header;
     document.body.style.position = "fixed";
-
-    adjustFixedDivs();
     window.visualViewport.onresize = adjustFixedDivs;
     window.visualViewport.onscroll = adjustFixedDivs;
-    createMobileControls(0);
-    root.onmouseup = e => {
+    createKb();
+    adjustFixedDivs();
+    container.onmouseup = e => {
         if (inputResolve) {
             const rect = curs.getBoundingClientRect();
             const cursX = rect.x + (rect.width / 2);
@@ -190,7 +206,8 @@ if (mobile) {
     header.style.display = "none";
     footerMsg.style.display = "none";
     footer.style.display = "none";
-    document.onkeydown = e => handleKey(e.key, e.ctrlKey);
+    dialog.style.display = "none";
+    document.onkeydown = e => handleKey(e.key, e.ctrlKey, e.location === 3);
 }
 
 for (let i = 0; i < rowno; i++) {
@@ -245,12 +262,27 @@ async function callback(name, ...args) {
     let key;
     let id;
     let menu;
+    let menuText;
+    let textId;
     let cmdIdx;
     switch(name) {
         case "shim_player_selection_or_tty":
             return true;
         case "shim_putstr":
-            msg.innerHTML += "\n" + args[2];
+            id = `menu_${args[0]}`;
+            menu = document.getElementById(id);
+            if (mobile && menu) {
+                textId = `${id}_text`;
+                menuText = document.getElementById(textId);
+                if (!menuText) {
+                    menuText = document.createElement("div");
+                    menuText.id = textId;
+                    menu.appendChild(menuText);
+                }
+                menuText.innerHTML += "\n" + args[2];
+            } else {
+                msg.innerHTML += "\n" + args[2];
+            }
             return 0;
         case "shim_raw_print":
             msg.innerHTML += "\n" + args[0];
@@ -302,7 +334,18 @@ async function callback(name, ...args) {
         case "shim_create_nhwindow":
             winCount++;
             console.log(`create window ${winCount}`);
-            windows.push({ id: winCount, type: args[0], selections: {} });
+            const w = { id: winCount, type: args[0], selections: {} };
+            windows.push(w);
+            if (w.type === nethackGlobal.constants.WIN_TYPE.NHW_MENU) {
+                id = `menu_${w.id}`;
+                menu = document.getElementById(id);
+                if (!menu) {
+                    menu = document.createElement("div");
+                    menu.id = id;
+                    menu.style.whiteSpace = "pre-wrap";
+                    menus.appendChild(menu);
+                }
+            }
             return winCount;
         case "shim_yn_function":
             let endStr = args[1] ? " [" + args[1] + "]" : ""; 
@@ -333,6 +376,14 @@ async function callback(name, ...args) {
             msg.innerHTML = "";
             isCmdInput = false;
             return cmdIdx;
+        case "shim_display_nhwindow":
+            id = `menu_${args[0]}`;
+            menu = document.getElementById(id);
+            if (args[1] && mobile && menu) {
+                openDialog(args[0]);
+                key = await new Promise(r => { inputResolve = r; });
+            }
+            return 0;
         case "shim_destroy_nhwindow":
             destroyMenu(args[0]);
             const idx = windows.findIndex(w => w.id === args[0]);
@@ -343,84 +394,47 @@ async function callback(name, ...args) {
         case "shim_start_menu":
             if (args[1] === 1) {
                 windows.find(w => w.id === args[0]).permInventory = true;
+                id = `menu_${args[0]}`;
+                menu = document.getElementById(id);
+                if (menu) {
+                    destroyMenu(args[0]); // no perm inventory for now
+                }
             }
             return 0;
         case "shim_add_menu":
             if (windows.find(w => w.id === args[0]).permInventory) {
                 return 0;
             }
-            id = `menu_${args[0]}`;
-            menu = document.getElementById(id);
-            if (!menu) {
-                menu = document.createElement("div");
-                menu.id = id;
-                menu.style.whiteSpace = "pre";
-                menus.appendChild(menu);
+            if (mobile) {
+                addMenuMobile(args)
+            } else {
+                addMenu(args);
             }
-            let isPreSelect = args[8] & 0x00000001;
-            let separator = isPreSelect ? " + " : " - ";
-            if (!args[2]) {
-                separator = "";
-            }
-            let selector = "";
-            if (args[3]) {
-                selector = args[3] ? String.fromCharCode(args[3]) : "";
-            } else if (args[2]) { // selectable but need to handle selector options manually
-                if (!selectorsByMenu[id]) {
-                    selector = "a";
-                    selectorsByMenu[id] = [selector];
-                } else {
-                    selector = String.fromCharCode(selectorsByMenu[id][0].charCodeAt(0) + 1);
-                    selectorsByMenu[id].unshift(selector);
-                }
-            }
-            if (isPreSelect) {
-                if (!incSelectionsByMenu[id]) {
-                    incSelectionsByMenu[id] = [];
-                }
-                incSelectionsByMenu[id].push(selector.charCodeAt(0));
-            }
-            windows.find(w => w.id === args[0]).selections[selector] = args[2];
-            menu.innerHTML += "\n" + selector + separator + escapeHtml(args[7]);
             return 0;
         case "shim_select_menu":
-            id = `menu_${args[0]}`;
-            if (!incSelectionsByMenu[id]) {
-                incSelectionsByMenu[id] = [];
-            }
             if (windows.find(w => w.id === args[0]).permInventory) {
                 return 0;
             }
-            let existingIdx = -1;
-            while (key !== 13) {
-                key = await new Promise(r => { inputResolve = r; });
-                existingIdx = incSelectionsByMenu[id].indexOf(key);
-                if (key === 27) {
-                    incSelectionsByMenu[id] = [];
-                    destroyMenu(args[0]);
-                    return -1;
-                } else if (existingIdx !== -1) {
-                    incSelectionsByMenu[id].splice(existingIdx, 1);
-                } else {
-                    incSelectionsByMenu[id].push(key);
-                }
-                updateMenuSelections(args[0], incSelectionsByMenu[id]);
-                if (args[1] === nethackGlobal.constants.MENU_SELECT.PICK_ONE) {
-                    break;
-                }
+            id = `menu_${args[0]}`;
+            menu = document.getElementById(id);
+            if (menu && mobile) {
+                openDialog(args[0]);
             }
-            inputResolve = undefined;
-            if (args[1] === nethackGlobal.constants.MENU_SELECT.PICK_NONE) {
-                return 0;
+            const incomingSelections = await selectMenu(args);
+            if (incomingSelections === -1) {
+                return -1;
             }
-            let incomingSelections = incSelectionsByMenu[id];
-            incSelectionsByMenu[`menu_${args[0]}`] = [];
             return getMenuSelect(args[0], args[1], args[2], incomingSelections);
         case "shim_end_menu":
             id = `menu_${args[0]}`;
             menu = document.getElementById(id);
+            menuText = document.getElementById(`${id}_text`);
             if (menu) {
-                menu.innerHTML += "\n" + args[1];
+                if (mobile && menuText) {
+                    menuText.innerHTML += "\n" + args[1];
+                } else {
+                    menu.innerHTML += "\n" + args[1];
+                }
             }
             return 0;
         case "shim_clear_nhwindow":
@@ -456,6 +470,43 @@ function destroyMenu(windowId) {
         delete incSelectionsByMenu[id];
         menu.remove();
     }
+    closeDialogIfEmpty();
+}
+
+function addMenu(args) {
+    let id = `menu_${args[0]}`;
+    let menu = document.getElementById(id);
+    if (!menu) {
+        menu = document.createElement("div");
+        menu.id = id;
+        menu.style.whiteSpace = "pre-wrap";
+        menus.appendChild(menu);
+    }
+    let isPreSelect = args[8] & 0x00000001;
+    let separator = isPreSelect ? " + " : " - ";
+    if (!args[2]) {
+        separator = "";
+    }
+    let selector = "";
+    if (args[3]) {
+        selector = args[3] ? String.fromCharCode(args[3]) : "";
+    } else if (args[2]) { // selectable but need to handle selector options manually
+        if (!selectorsByMenu[id]) {
+            selector = "a";
+            selectorsByMenu[id] = [selector];
+        } else {
+            selector = String.fromCharCode(selectorsByMenu[id][0].charCodeAt(0) + 1);
+            selectorsByMenu[id].unshift(selector);
+        }
+    }
+    if (isPreSelect) {
+        if (!incSelectionsByMenu[id]) {
+            incSelectionsByMenu[id] = [];
+        }
+        incSelectionsByMenu[id].push(selector.charCodeAt(0));
+    }
+    windows.find(w => w.id === args[0]).selections[selector] = args[2];
+    menu.innerHTML += "\n" + selector + separator + escapeHtml(args[7]);
 }
 
 // TODO make cleaner
@@ -479,6 +530,72 @@ function updateMenuSelections(windowId, incomingSelections) {
         }
     }
     menu.innerHTML = newText;
+}
+
+function addMenuMobile(args) {
+    let id = `menu_${args[0]}`;
+    let textId = `${id}_text`;
+    let menu = document.getElementById(id);
+    let menuText = document.getElementById(textId);
+    if (!menu) {
+        menu = document.createElement("div");
+        menu.id = id;
+        menu.style.whiteSpace = "pre-wrap";
+        menus.appendChild(menu);
+    }
+    if (!menuText) {
+        menuText = document.createElement("div");
+        menuText.id = textId;
+        menu.appendChild(menuText);
+    }
+    let isPreSelect = args[8] & 0x00000001;
+    let separator = isPreSelect ? " + " : " - ";
+    if (!args[2]) {
+        separator = "";
+    }
+    let selector = "";
+    if (args[3]) {
+        selector = args[3] ? String.fromCharCode(args[3]) : "";
+    } else if (args[2]) { // selectable but need to handle selector options manually
+        if (!selectorsByMenu[id]) {
+            selector = "a";
+            selectorsByMenu[id] = [selector];
+        } else {
+            selector = String.fromCharCode(selectorsByMenu[id][0].charCodeAt(0) + 1);
+            selectorsByMenu[id].unshift(selector);
+        }
+    }
+    if (isPreSelect) {
+        if (!incSelectionsByMenu[id]) {
+            incSelectionsByMenu[id] = [];
+        }
+        incSelectionsByMenu[id].push(selector.charCodeAt(0));
+    }
+    windows.find(w => w.id === args[0]).selections[selector] = args[2];
+    menuText.innerHTML += "\n" + selector + separator + escapeHtml(args[7]);
+    selector && addDialogOption(selector, menu);
+}
+
+function updateMenuSelectionsMobile(windowId, incomingSelections) {
+    const id = `menu_${windowId}_text`;
+    const menuText = document.getElementById(id);
+    if (!menuText) {
+        return;
+    }
+    let text = menuText.innerHTML;
+    let newText = "";
+    const lines = text.split("\n");
+    lines.shift(); // remove start empty line
+    for (const line of lines) {
+        if (line.substring(1, 4) !== " + " && line.substring(1, 4) !== " - ") {
+            newText += "\n" + line;
+        }else if (incomingSelections.includes(line.charCodeAt(0))) {
+            newText += "\n" + line.charAt(0) + " + " + line.substring(4);
+        } else {
+            newText += "\n" + line.charAt(0) + " - " + line.substring(4);
+        }
+    }
+    menuText.innerHTML = newText;
 }
 
 function updateStatus(args) {
@@ -550,6 +667,43 @@ function getExtCmdIdx(input) {
         cmds.push(str);
     }
     return cmds.indexOf(input);
+}
+
+async function selectMenu(args) {
+    let id = `menu_${args[0]}`;
+    if (!incSelectionsByMenu[id]) {
+        incSelectionsByMenu[id] = [];
+    }
+    let existingIdx = -1;
+    let key;
+    while (key !== 13) {
+        key = await new Promise(r => { inputResolve = r; });
+        existingIdx = incSelectionsByMenu[id].indexOf(key);
+        if (key === 27) {
+            incSelectionsByMenu[id] = [];
+            destroyMenu(args[0]);
+            return -1;
+        } else if (existingIdx !== -1) {
+            incSelectionsByMenu[id].splice(existingIdx, 1);
+        } else {
+            incSelectionsByMenu[id].push(key);
+        }
+        if (mobile) {
+            updateMenuSelectionsMobile(args[0], incSelectionsByMenu[id]);
+        } else {
+            updateMenuSelections(args[0], incSelectionsByMenu[id]);
+        }
+        if (args[1] === nethackGlobal.constants.MENU_SELECT.PICK_ONE) {
+            break;
+        }
+    }
+    inputResolve = undefined;
+    if (args[1] === nethackGlobal.constants.MENU_SELECT.PICK_NONE) {
+        return 0;
+    }
+    let incomingSelections = incSelectionsByMenu[id];
+    incSelectionsByMenu[`menu_${args[0]}`] = [];
+    return incomingSelections;
 }
 
 // typedef union any {
@@ -665,11 +819,23 @@ function relativeCoordsToDrc(y, x) {
 
 function adjustFixedDivs() {
     const { offsetTop, offsetLeft, height, width, scale } = window.visualViewport;
+    if (dialogOn) {
+        dialog.style.top = `${offsetTop}px`;
+        dialog.style.left = `${offsetLeft}px`;
+        dialog.style.height = `${height * 0.98}px`;
+        dialog.style.width = `${width * 0.98}px`;
+        for (const el of Array.from(dialog.children)) {
+            el.style.width = `${width * 0.88}px`;
+            el.style.margin = `${width * 0.01}px`;
+            el.style.padding = `${width * 0.02}px`;
+        }
+        return;
+    }
     header.style.top = `${offsetTop}px`;
     header.style.left = `${offsetLeft}px`;
     header.style.height = `${height * 0.1}px`;
     header.style.width = `${width * 0.98}px`;
-    if (kbOn) {
+    if (mobileKbOn) {
         footerMsg.style.top = `${(offsetTop + (height * 0.43))}px`;
         footerMsg.style.left = `${offsetLeft}px`;
         footerMsg.style.height = `${height * 0.15}px`;
@@ -714,10 +880,46 @@ function centerIfMobile() {
     }
 }
 
-let shift = false;
-let ctrl = false;
+function openDialog(windowId) {
+    const menu = document.getElementById(`menu_${windowId}`);
+    if (menu) {
+        dialog.style.display = "";
+        dialogOn = true;
+        for (const option of ['Enter', 'Escape']) {
+            addDialogOption(option, menu);
+        }
+        adjustFixedDivs();
+    }
+}
 
-function createMobileControls(idx) {
+function addDialogOption(option, menu) {
+    const el = document.createElement("div");
+    el.style.border = "1px solid lightgray";
+    el.style.backgroundColor = "black";
+    el.style.display = "flex";
+    el.style.flexDirection = "column";
+    el.style.justifyContent = "center";
+    el.style.alignItems = "start";
+    el.style.padding = "10px";
+    el.style.margin = "5px";
+    el.innerHTML = option;
+    el.onclick = () => {
+        console.log(option)
+        handleKey(option, false);
+    };
+    menu.appendChild(el);
+}
+
+function closeDialogIfEmpty() {
+    if (mobile && !Array.from(dialog.children).some(el => el.id?.startsWith("menu"))) {
+        dialogOn = false;
+        dialog.innerHTML = "";
+        dialog.style.display = "none";
+        adjustFixedDivs();
+    }
+}
+
+function createMobileControls() {
     const chars = ['Kb', 'CmrLck', 'CmrRst'];
     footer.innerHTML = "";
     footer.style.flexDirection = "row";
@@ -735,7 +937,7 @@ function createMobileControls(idx) {
         el.innerHTML = char;
         el.onmousedown = () => {
             if (char === 'Kb') {
-                kbOn = !kbOn;
+                mobileKbOn = !mobileKbOn;
                 createKb();
                 adjustFixedDivs();
             } else if (char === 'CmrRst') {
@@ -805,7 +1007,7 @@ function createKb(idx = 0) {
             el.innerHTML = char;
             el.onmousedown = () => {
                 if (char === 'Kb') {
-                    kbOn = !kbOn;
+                    mobileKbOn = !mobileKbOn;
                     createMobileControls();
                     adjustFixedDivs();
                 } else if (char === 'Shift') {
@@ -833,6 +1035,10 @@ function createKb(idx = 0) {
                     setTimeout(() => {
                         el.style.backgroundColor = "black";
                     }, 100);
+                    if (idx === 1) {
+                        createKb(0);
+                        adjustFixedDivs();
+                    }
                     if (char === 'Esc') {
                         handleKey('Escape', ctrl);
                     } else if (char === 'Entr') {
