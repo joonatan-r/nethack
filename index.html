@@ -509,7 +509,9 @@ function addMenu(args) {
         }
         incSelectionsByMenu[id].push(selector.charCodeAt(0));
     }
-    windows.find(w => w.id === args[0]).selections[selector] = args[2];
+    if (selector !== "") {
+        windows.find(w => w.id === args[0]).selections[selector] = args[2];
+    }
     menu.innerHTML += "\n" + selector + separator + escapeHtml(args[7]);
 }
 
@@ -750,7 +752,7 @@ async function selectMenu(args) {
 //     long count;
 //     unsigned itemflags;
 // } menu_item;
-// 8, 8, 4
+// 8, 4, 4
 function getMenuSelect(window, how, selected, incomingSelections) {
     destroyMenu(window);
     const validSelections = [];
@@ -768,7 +770,8 @@ function getMenuSelect(window, how, selected, incomingSelections) {
     let i = 0;
     for (const v of validSelections) {
         Module.setValue(ptr + i, v, 'i64');
-        i += 20;
+        Module.setValue(ptr + i + 8, -1, 'i32'); // TODO for now always set "-1" meaning "all"
+        i += 16;
     }
     Module.setValue(selected, ptr, '*');
     return validSelections.length;
