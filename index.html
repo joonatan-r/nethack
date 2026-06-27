@@ -82,10 +82,10 @@ import factory from "./wasm/nethack.js";
 
 let mobile = !document.location.href.endsWith("#pc");
 
+let kbOn = false;
 let lockCamera = true;
-let keepKb = false;
-let resizeFromBlur = false;
 let rootBaseMarginTop = 0;
+let footerHeight = 0;
 let synced = false;
 let syncResolve;
 const syncPromise = new Promise(r => { syncResolve = r; });
@@ -161,31 +161,6 @@ if (mobile) {
     menus = footerMsg;
     status = header;
     document.body.style.position = "fixed";
-    function adjustFixedDivs() {
-        const { offsetTop, offsetLeft, height, width, scale } = window.visualViewport;
-        header.style.top = `${offsetTop}px`;
-        header.style.left = `${offsetLeft}px`;
-        header.style.height = `${height * 0.1}px`;
-        header.style.width = `${width * 0.98}px`;
-        footerMsg.style.top = `${(offsetTop + (height * 0.74))}px`;
-        footerMsg.style.left = `${offsetLeft}px`;
-        footerMsg.style.height = `${height * 0.15}px`;
-        footerMsg.style.width = `${width * 0.98}px`;
-        footer.style.top = `${(offsetTop + (height * 0.89))}px`;
-        footer.style.left = `${offsetLeft}px`;
-        footer.style.height = `${height * 0.1}px`;
-        footer.style.width = `${width * 0.98}px`;
-        rootBaseMarginTop = offsetTop + height * 0.1;
-        if (lockCamera) {
-            // skip one center from resize event if keepKb is on to reduce flickering,
-            // this will get center by shim_curs if moving
-            if (resizeFromBlur) {
-                resizeFromBlur = false;
-                return;
-            }
-            centerIfMobile();
-        }
-    }
 
     adjustFixedDivs();
     window.visualViewport.onresize = adjustFixedDivs;
@@ -193,10 +168,11 @@ if (mobile) {
     createMobileControls(0);
     root.onmouseup = e => {
         if (inputResolve) {
-            const centerX = window.visualViewport.width / 2 + window.visualViewport.offsetLeft;
-            const centerY = window.visualViewport.height / 2 + window.visualViewport.offsetTop;
-            const x = e.x - centerX;
-            const y = e.y - centerY;
+            const rect = curs.getBoundingClientRect();
+            const cursX = rect.x + (rect.width / 2);
+            const cursY = rect.y + (rect.height / 2);
+            const x = e.x - cursX;
+            const y = e.y - cursY;
             let key = {
                 1: 'b',
                 2: 'j',
@@ -687,10 +663,47 @@ function relativeCoordsToDrc(y, x) {
     }
 }
 
+function adjustFixedDivs() {
+    const { offsetTop, offsetLeft, height, width, scale } = window.visualViewport;
+    header.style.top = `${offsetTop}px`;
+    header.style.left = `${offsetLeft}px`;
+    header.style.height = `${height * 0.1}px`;
+    header.style.width = `${width * 0.98}px`;
+    if (kbOn) {
+        footerMsg.style.top = `${(offsetTop + (height * 0.43))}px`;
+        footerMsg.style.left = `${offsetLeft}px`;
+        footerMsg.style.height = `${height * 0.15}px`;
+        footerMsg.style.width = `${width * 0.98}px`;
+        footer.style.top = `${(offsetTop + (height * 0.59))}px`;
+        footer.style.left = `${offsetLeft}px`;
+        footer.style.height = `${height * 0.4}px`;
+        footer.style.width = `${width * 0.98}px`;
+        footerHeight = height * 0.4;
+        for (const row of Array.from(footer.children)) {
+            row.style.height = `${height * 0.1}px`;
+            row.style.width = `${width * 0.98}px`;
+        }
+    } else {
+        footerMsg.style.top = `${(offsetTop + (height * 0.74))}px`;
+        footerMsg.style.left = `${offsetLeft}px`;
+        footerMsg.style.height = `${height * 0.15}px`;
+        footerMsg.style.width = `${width * 0.98}px`;
+        footer.style.top = `${(offsetTop + (height * 0.89))}px`;
+        footer.style.left = `${offsetLeft}px`;
+        footer.style.height = `${height * 0.1}px`;
+        footer.style.width = `${width * 0.98}px`;
+        footerHeight = height * 0.1;
+    }
+    rootBaseMarginTop = offsetTop + height * 0.1;
+    if (lockCamera) {
+        centerIfMobile();
+    }
+}
+
 function centerIfMobile() {
     if (mobile && curs) {
         const centerX = window.visualViewport.width / 2 + window.visualViewport.offsetLeft;
-        const centerY = window.visualViewport.height / 2 + window.visualViewport.offsetTop;
+        const centerY = (window.visualViewport.height - footerHeight) / 2 + window.visualViewport.offsetTop;
         const rect = curs.getBoundingClientRect();
         const cursX = rect.x + (rect.width / 2);
         const cursY = rect.y + (rect.height / 2);
@@ -704,36 +717,11 @@ function centerIfMobile() {
 let shift = false;
 let ctrl = false;
 
-// TODO maybe just create custom soft keyboard instead of all focus/blur/resize pain
 function createMobileControls(idx) {
-    const chars = ['Kb', 'Ctrl', 'Escape', 'Enter', 'KeepKb', 'CmrLck', 'CmrRst'];
+    const chars = ['Kb', 'CmrLck', 'CmrRst'];
     footer.innerHTML = "";
+    footer.style.flexDirection = "row";
     for (const char of chars) {
-        if (char === 'Kb') {
-            const el = document.createElement("input");
-            el.type = "text";
-            el.placeholder = "Kb";
-            el.autocapitalize = "off";
-            el.autocorrect = "off";
-            el.style.color = "transparent";
-            el.style.backgroundColor = "black";
-            el.style.width = "50px";
-            el.style.padding = "10px";
-            el.style.margin = "5px";
-            el.style.border = "1px solid lightgray";
-            el.oninput = e => {
-                handleKey(e.data, ctrl);
-                el.value = "";
-            };
-            el.onblur = () => {
-                if (keepKb) {
-                    resizeFromBlur = true;
-                    el.focus();
-                }
-            };
-            footer.appendChild(el);
-            continue;
-        }
         const el = document.createElement("div");
         el.style.display = "flex";
         el.style.flexDirection = "column";
@@ -743,33 +731,122 @@ function createMobileControls(idx) {
         el.style.margin = "5px";
         el.style.aspectRatio = "1 / 1";
         el.style.border = "1px solid lightgray";
-        el.style.backgroundColor = (char === 'CmrLck') ? "#333" : "black";
+        el.style.backgroundColor = (char === 'CmrLck') ? "#555" : "black";
         el.innerHTML = char;
         el.onmousedown = () => {
-            if (char === 'Shift') {
-                shift = !shift;
-                el.style.backgroundColor = shift ? "#333" : "black";
-            } else if (char === 'Ctrl') {
-                ctrl = !ctrl;
-                el.style.backgroundColor = ctrl ? "#333" : "black";
-            } else if (char === 'KeepKb') {
-                keepKb = !keepKb;
-                el.style.backgroundColor = keepKb ? "#333" : "black";
+            if (char === 'Kb') {
+                kbOn = !kbOn;
+                createKb();
+                adjustFixedDivs();
             } else if (char === 'CmrRst') {
                 root.style.marginLeft = 0;
                 root.style.marginTop = rootBaseMarginTop;
             } else if (char === 'CmrLck') {
                 lockCamera = !lockCamera;
-                el.style.backgroundColor = lockCamera ? "#333" : "black";
+                el.style.backgroundColor = lockCamera ? "#555" : "black";
                 if (lockCamera) {
                     centerIfMobile();
                 }
-            } else {
-                const inputChar = (shift && char.length === 1) ? char.toUpperCase() : char;
-                handleKey(inputChar, ctrl);
             }
         };
         footer.appendChild(el);
+    }
+}
+
+function createKb(idx = 0) {
+    const keys = [
+        [
+            ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+            ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
+            ['Shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm'],
+            ['Kb', 'Ctrl', 'Sym', 'Spc', 'Esc', 'Entr']
+        ],
+        [
+            ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+            ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
+            ['Shift', 'Z', 'X', 'C', 'V', 'B', 'N', 'M'],
+            ['Kb', 'Ctrl', 'Sym', 'Spc', 'Esc', 'Entr']
+        ],
+        [
+            ['`', '\\', '$', '=', '/', '_', '<', '>', '[', ']'],
+            ['!', '@', '#', '?', '%', '^', '&', '*', '(', ')'],
+            ['123', '-', '\'', '"', ':', ';', ',', '.'],
+            ['Kb', 'Ctrl', 'abc', 'Spc', 'Esc', 'Entr']
+        ],
+        [
+            ['7', '8', '9'],
+            ['4', '5', '6'],
+            ['1', '2', '3'],
+            ['Kb', 'Ctrl', 'abc', '0', 'Esc', 'Entr']
+        ]
+    ];
+    footer.innerHTML = "";
+    footer.style.flexDirection = "column";
+    for (const row of keys[idx]) {
+        const rowEl = document.createElement("div");
+        rowEl.style.display = "flex";
+        rowEl.style.flexDirection = "row";
+        rowEl.style.justifyContent = "space-between";
+        rowEl.style.position = "relative";
+        for (const char of row) {
+            const el = document.createElement("div");
+            el.style.display = "flex";
+            el.style.flexDirection = "column";
+            el.style.justifyContent = "center";
+            el.style.alignItems = "center";
+            el.style.width = "100%";
+            el.style.height = "100%";
+            el.style.overflow = "hidden";
+            el.style.border = "1px solid lightgray";
+            el.style.backgroundColor = "black";
+            if (idx === 1 && char === 'Shift' || ctrl && char === 'Ctrl') {
+                el.style.backgroundColor = "#555";
+            }
+            el.innerHTML = char;
+            el.onmousedown = () => {
+                if (char === 'Kb') {
+                    kbOn = !kbOn;
+                    createMobileControls();
+                    adjustFixedDivs();
+                } else if (char === 'Shift') {
+                    if (idx === 0) {
+                        createKb(1);
+                        adjustFixedDivs();
+                    } else {
+                        createKb(0);
+                        adjustFixedDivs();
+                    }
+                } else if (char === 'Ctrl') {
+                    ctrl = !ctrl;
+                    el.style.backgroundColor = ctrl ? "#555" : "black";
+                } else if (char === 'Sym') {
+                    createKb(2);
+                    adjustFixedDivs();
+                } else if (char === 'abc') {
+                    createKb(0);
+                    adjustFixedDivs();
+                } else if (char === '123') {
+                    createKb(3);
+                    adjustFixedDivs();
+                } else {
+                    el.style.backgroundColor = "#555";
+                    setTimeout(() => {
+                        el.style.backgroundColor = "black";
+                    }, 100);
+                    if (char === 'Esc') {
+                        handleKey('Escape', ctrl);
+                    } else if (char === 'Entr') {
+                        handleKey('Enter', ctrl);
+                    } else if (char === 'Spc') {
+                        handleKey(' ', ctrl);
+                    } else {
+                        handleKey(char, ctrl);
+                    }
+                }
+            };
+            rowEl.appendChild(el);
+        }
+        footer.appendChild(rowEl);
     }
 }
 
