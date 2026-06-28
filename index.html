@@ -99,12 +99,13 @@ let mobileKbOn = true;
 let shift = false;
 let ctrl = false;
 let dialogOn = false;
-let lockCamera = true;
+let lockCamera = false;
 let rootBaseMarginTop = 0;
 let footerHeight = 0;
 let synced = false;
 let syncResolve;
 const syncPromise = new Promise(r => { syncResolve = r; });
+const autoQueue = [];
 const Module = {};
 let storedFS;
 let inputResolve;
@@ -199,7 +200,26 @@ if (mobile) {
                 8: 'k',
                 9: 'u',
             }[relativeCoordsToDrc(y, x)];
-            inputResolve(key.charCodeAt(0));
+            const tolerance = 10;
+            const center = getVisualCenter();
+            if (Math.abs(center.x - cursX) > tolerance || Math.abs(center.y - cursY) > tolerance) {
+                // if user has panned, auto travel
+                autoQueue.splice(0, autoQueue.length);
+                const coords = getCoordsFromElement(e.target);
+                const cursCoords = getCoordsFromElement(curs);
+                const horizKey = coords.x > cursCoords.x ? 'l' : 'h';
+                const vertKey = coords.y > cursCoords.y ? 'j' : 'k';
+                for (let i = 0; i < Math.abs(coords.x - cursCoords.x); i++) {
+                    autoQueue.push(horizKey);
+                }
+                for (let i = 0; i < Math.abs(coords.y - cursCoords.y); i++) {
+                    autoQueue.push(vertKey);
+                }
+                autoQueue.push(".");
+                inputResolve("_".charCodeAt(0));
+            } else {
+                inputResolve(key.charCodeAt(0));
+            }
         }
     };
 } else {
@@ -257,6 +277,15 @@ async function callback(name, ...args) {
     if (init) {
         init = false;
         await syncPromise;
+    }
+
+    if (autoQueue.length) {
+        if (name === "shim_nhgetch" || name === "shim_nh_poskey") {
+            msg.innerHTML = "";
+            return autoQueue.shift().charCodeAt(0);
+        } else if (name === "shim_select_menu") {
+            return 0;
+        }
     }
 
     let key;
@@ -893,17 +922,31 @@ function adjustFixedDivs() {
     }
 }
 
+function getVisualCenter() {
+    return {
+        x: window.visualViewport.width / 2 + window.visualViewport.offsetLeft,
+        y: (window.visualViewport.height - footerHeight) / 2 + window.visualViewport.offsetTop
+    };
+}
+
+function getCoordsFromElement(el) {
+    const coords = el.id.split("_");
+    return {
+        x: Number(coords[0]),
+        y: Number(coords[1])
+    };
+}
+
 function centerIfMobile() {
     if (mobile && curs) {
-        const centerX = window.visualViewport.width / 2 + window.visualViewport.offsetLeft;
-        const centerY = (window.visualViewport.height - footerHeight) / 2 + window.visualViewport.offsetTop;
+        const center = getVisualCenter();
         const rect = curs.getBoundingClientRect();
         const cursX = rect.x + (rect.width / 2);
         const cursY = rect.y + (rect.height / 2);
         const prevMarginLeft = Number(root.style.marginLeft?.slice(0, -2));
         const prevMarginTop = Number(root.style.marginTop?.slice(0, -2));
-        root.style.marginLeft = `${prevMarginLeft + (centerX - cursX)}px`;
-        root.style.marginTop = `${prevMarginTop + (centerY - cursY)}px`;
+        root.style.marginLeft = `${prevMarginLeft + (center.x - cursX)}px`;
+        root.style.marginTop = `${prevMarginTop + (center.y - cursY)}px`;
     }
 }
 
@@ -959,7 +1002,7 @@ function createMobileControls() {
         el.style.margin = "5px";
         el.style.aspectRatio = "1 / 1";
         el.style.border = "1px solid lightgray";
-        el.style.backgroundColor = (char === 'CmrLck') ? "#555" : "black";
+        el.style.backgroundColor = "black";
         el.innerHTML = char;
         el.onmousedown = () => {
             if (char === 'Kb') {
