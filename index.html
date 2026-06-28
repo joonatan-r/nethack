@@ -106,6 +106,8 @@ let synced = false;
 let syncResolve;
 const syncPromise = new Promise(r => { syncResolve = r; });
 const autoQueue = [];
+const autoLookMsgs = [];
+let autoLookAction = false;
 const Module = {};
 let storedFS;
 let inputResolve;
@@ -202,7 +204,10 @@ if (mobile) {
             }[relativeCoordsToDrc(y, x)];
             const tolerance = 10;
             const center = getVisualCenter();
-            if (Math.abs(center.x - cursX) > tolerance || Math.abs(center.y - cursY) > tolerance) {
+            if (e.target === curs) {
+                autoLookAction = true;
+                inputResolve(":".charCodeAt(0));
+            } else if (Math.abs(center.x - cursX) > tolerance || Math.abs(center.y - cursY) > tolerance) {
                 // if user has panned, auto travel
                 autoQueue.splice(0, autoQueue.length);
                 const coords = getCoordsFromElement(e.target);
@@ -279,7 +284,55 @@ async function callback(name, ...args) {
         await syncPromise;
     }
 
+    let key;
+    let id;
+    let menu;
+    let menuText;
+    let textId;
+    let cmdIdx;
+
+    if (autoLookAction) {
+        if (name === "shim_raw_print") {
+            autoLookMsgs.push(args[0]);
+        } else if (name === "shim_putstr") {
+            autoLookMsgs.push(args[2]);
+        } else if (name === "shim_nhgetch" || name === "shim_nh_poskey") {
+            let stairUp = false;
+            let stairDown = false;
+            let container = false;
+            let items = false;
+            for (const m of autoLookMsgs) {
+                if (m.includes("staircase up")) {
+                    stairUp = true;
+                } else if (m.includes("staircase down")) {
+                    stairDown = true;
+                } else if (["sack", "bag", "box", "chest"].some(i => m.includes(i))) {
+                    container = true;
+                } else if (m.includes("see here") || m.includes("feel here") || m.includes("are here")) {
+                    items = true;
+                }
+            }
+            autoLookAction = false;
+            autoLookMsgs.splice(0, autoLookMsgs.length);
+            if (container) {
+                autoQueue.push("#", "loot");
+            } else if (stairDown) {
+                autoQueue.push(">");
+            } else if (stairUp) {
+                autoQueue.push("<");
+            } else if (items) {
+                autoQueue.push(",");
+            }
+        } else if (name === "shim_display_nhwindow") {
+            return 0;
+        }
+    }
+
     if (autoQueue.length) {
+        if (name === "shim_get_ext_cmd") {
+            cmdIdx = getExtCmdIdx(autoQueue.shift());
+            return cmdIdx;
+        }
         if (name === "shim_nhgetch" || name === "shim_nh_poskey") {
             msg.innerHTML = "";
             return autoQueue.shift().charCodeAt(0);
@@ -288,12 +341,6 @@ async function callback(name, ...args) {
         }
     }
 
-    let key;
-    let id;
-    let menu;
-    let menuText;
-    let textId;
-    let cmdIdx;
     switch(name) {
         case "shim_player_selection_or_tty":
             return true;
