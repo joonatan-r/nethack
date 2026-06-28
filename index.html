@@ -424,14 +424,23 @@ async function callback(name, ...args) {
             }
             return winCount;
         case "shim_yn_function":
-            let endStr = args[1] ? " [" + args[1] + "]" : ""; 
-            msg.innerHTML += "\n" + args[0] + endStr;
+            if (mobile) {
+                openYnDialog(args);
+            } else {
+                let endStr = args[1] ? " [" + args[1] + "]" : ""; 
+                msg.innerHTML += "\n" + args[0] + endStr;
+            }
             key = await new Promise(r => { inputResolve = r; });
             while (args[1] && !args[1].includes(String.fromCharCode(key))) {
                 key = await new Promise(r => { inputResolve = r; });
             }
             inputResolve = undefined;
-            msg.innerHTML = "";
+            if (mobile) {
+                document.getElementById("yn_elem")?.remove();
+                closeDialogIfEmpty();
+            } else {
+                msg.innerHTML = "";
+            }
             return key;
         // case "shim_message_menu":
         //     msg.innerHTML += "\n" + args[0]; // TODO is this needed?
@@ -1007,6 +1016,31 @@ function openDialog(windowId) {
         }
         adjustFixedDivs();
     }
+}
+
+function openYnDialog(args) {
+    dialog.style.display = "";
+    dialogOn = true;
+    const ynEl = document.createElement("div");
+    ynEl.id = "yn_elem";
+    const ynElText = document.createElement("div");
+    ynElText.innerHTML = args[0];
+    ynEl.appendChild(ynElText);
+    dialog.appendChild(ynEl);
+    let options;
+    if (args[1]) {
+        options = args[1].split("")
+    } else {
+        // for some reason sometimes options are in the question
+        options = args[0].split("[")?.[1]?.split("]")?.[0].split("");
+        if (!options) {
+            options = ["Escape"];
+        }
+    }
+    for (const option of options) {
+        addDialogOption(option, option, ynEl);
+    }
+    adjustFixedDivs();
 }
 
 function addDialogOption(option, text, menu) {
