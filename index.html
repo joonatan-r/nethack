@@ -111,6 +111,7 @@ let footerHeight = 0;
 let synced = false;
 let syncResolve;
 const syncPromise = new Promise(r => { syncResolve = r; });
+let touchTimer;
 const autoQueue = [];
 const autoLookMsgs = [];
 let autoLookAction = false;
@@ -191,6 +192,23 @@ if (mobile) {
     window.visualViewport.onscroll = adjustFixedDivs;
     createMobileControls();
     adjustFixedDivs();
+    document.addEventListener("touchstart", e => {
+        if ([header, footerMsg, footer, dialog].some(el => el.contains(e.target))
+            || e.touches?.length > 1
+        ) {
+            return;
+        }
+        const coords = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        const key = getDirectionKeyChar(coords).toUpperCase();
+        clearTimeout(touchTimer);
+        touchTimer = setTimeout(() => handleKey(key), 500);
+    });
+    document.addEventListener("touchmove", e => {
+        clearTimeout(touchTimer);
+    });
+    document.addEventListener("touchend", e => {
+        clearTimeout(touchTimer);
+    });
     document.addEventListener("mouseup", e => {
         if ([header, footerMsg, footer, dialog].some(el => el.contains(e.target))) {
             return;
@@ -199,18 +217,7 @@ if (mobile) {
             const rect = curs.getBoundingClientRect();
             const cursX = rect.x + (rect.width / 2);
             const cursY = rect.y + (rect.height / 2);
-            const x = e.x - cursX;
-            const y = e.y - cursY;
-            let key = {
-                1: 'b',
-                2: 'j',
-                3: 'n',
-                4: 'h',
-                6: 'l',
-                7: 'y',
-                8: 'k',
-                9: 'u',
-            }[relativeCoordsToDrc(y, x)];
+            const key = getDirectionKeyChar(e);
             const tolerance = 10;
             const center = getVisualCenter();
             if (e.target === curs) {
@@ -1079,6 +1086,24 @@ function closeDialogIfEmpty() {
         dialog.style.display = "none";
         adjustFixedDivs();
     }
+}
+
+function getDirectionKeyChar(e) {
+    const rect = curs.getBoundingClientRect();
+    const cursX = rect.x + (rect.width / 2);
+    const cursY = rect.y + (rect.height / 2);
+    const x = e.x - cursX;
+    const y = e.y - cursY;
+    return {
+        1: 'b',
+        2: 'j',
+        3: 'n',
+        4: 'h',
+        6: 'l',
+        7: 'y',
+        8: 'k',
+        9: 'u',
+    }[relativeCoordsToDrc(y, x)];
 }
 
 function getClosestCoordElement(e) {
