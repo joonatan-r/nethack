@@ -365,8 +365,12 @@ async function callback(name, ...args) {
             inputResolve = undefined;
             msg.innerHTML = "";
             return key;
-        case "shim_getmsghistory":
+        case "shim_getmsghistory": // TODO
             return "";
+        case "putmsghistory":
+            return 0;
+        case "shim_doprev_message":
+            return 0;
         case "shim_get_ext_cmd":
             isCmdInput = true;
             msg.innerHTML = "#";
@@ -495,11 +499,10 @@ function addMenu(args) {
         selector = args[3] ? String.fromCharCode(args[3]) : "";
     } else if (args[2]) { // selectable but need to handle selector options manually
         if (!selectorsByMenu[id]) {
-            selector = "a";
+            selector = getNextChar();
             selectorsByMenu[id] = [selector];
         } else {
-            // TODO fix if more items than char codes can handle
-            selector = String.fromCharCode(selectorsByMenu[id][0].charCodeAt(0) + 1);
+            selector = getNextChar(selectorsByMenu[id][0]);
             selectorsByMenu[id].unshift(selector);
         }
     }
@@ -564,10 +567,10 @@ function addMenuMobile(args) {
         selector = args[3] ? String.fromCharCode(args[3]) : "";
     } else if (args[2]) { // selectable but need to handle selector options manually
         if (!selectorsByMenu[id]) {
-            selector = "a";
+            selector = getNextChar();
             selectorsByMenu[id] = [selector];
         } else {
-            selector = String.fromCharCode(selectorsByMenu[id][0].charCodeAt(0) + 1);
+            selector = getNextChar(selectorsByMenu[id][0]);
             selectorsByMenu[id].unshift(selector);
         }
     }
@@ -796,7 +799,17 @@ function getColor(colorIdx) {
         CLR_WHITE: "white",
         CLR_YELLOW: "yellow"
     }[color] || "";
+}
 
+function getNextChar(char) {
+    if (!char) {
+        return "a";
+    }
+    const code = char.charCodeAt(0) + 1;
+    if (code > "z".charCodeAt(0)) {
+        return "A";
+    }
+    return String.fromCharCode(code);
 }
 
 function escapeHtml(str) {
