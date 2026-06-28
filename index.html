@@ -131,6 +131,9 @@ const selectorsByMenu = {};
 const incSelectionsByMenu = {};
 const statusMap = {};
 let condsMap = {};
+const prevMsgs = [];
+let prevMsgsOffset = 1;
+let skipMsgSaves = false;
 let msg = document.getElementById("msg");
 const root = document.getElementById("root");
 let menus = document.getElementById("menus");
@@ -149,6 +152,7 @@ function handleKey(inputKey, ctrlKey, numPad) {
                 inputResolve(-1);
             } else if (inputKey.length === 1) {
                 cmdInput += inputKey;
+                // NOTE: history should already be handled
                 msg.innerHTML = "#" + cmdInput;
             }
         } else if (inputKey.length === 1) {
@@ -356,7 +360,7 @@ async function callback(name, ...args) {
             return cmdIdx;
         }
         if (name === "shim_nhgetch" || name === "shim_nh_poskey") {
-            msg.innerHTML = "";
+            newMsg("");
             return autoQueue.shift().charCodeAt(0);
         } else if (name === "shim_select_menu") {
             return 0;
@@ -379,11 +383,11 @@ async function callback(name, ...args) {
                 }
                 menuText.innerHTML += "\n" + args[2];
             } else {
-                msg.innerHTML += "\n" + args[2];
+                newMsg(args[2], true);
             }
             return 0;
         case "shim_raw_print":
-            msg.innerHTML += "\n" + args[0];
+            newMsg(args[0], true);
             return 0;
         case "shim_status_update":
             updateStatus(args);
@@ -452,7 +456,7 @@ async function callback(name, ...args) {
                 openYnDialog(args[0], options);
             } else {
                 let endStr = args[1] ? " [" + args[1] + "]" : ""; 
-                msg.innerHTML += "\n" + args[0] + endStr;
+                newMsg(args[0] + endStr, true);
             }
             key = await new Promise(r => { inputResolve = r; });
             while (args[1] && !args[1].includes(String.fromCharCode(key))) {
@@ -463,30 +467,36 @@ async function callback(name, ...args) {
                 document.getElementById("yn_elem")?.remove();
                 closeDialogIfEmpty();
             } else {
-                msg.innerHTML = "";
+                newMsg("");
             }
             return key;
         // case "shim_message_menu":
-        //     msg.innerHTML += "\n" + args[0]; // TODO is this needed?
+        //     newMsg(args[0], true); // TODO is this needed?
         case "shim_nhgetch":
         case "shim_nh_poskey":
             key = await new Promise(r => { inputResolve = r; });
             inputResolve = undefined;
-            msg.innerHTML = "";
+            newMsg("");
             return key;
         case "shim_getmsghistory": // TODO
             return "";
         case "putmsghistory":
             return 0;
         case "shim_doprev_message":
+            newMsg("");
+            if (prevMsgs.length - prevMsgsOffset >= 0) {
+                skipMsgSaves = true;
+                msg.innerHTML = prevMsgs[prevMsgs.length - prevMsgsOffset];
+                prevMsgsOffset++;
+            }
             return 0;
         case "shim_get_ext_cmd":
             isCmdInput = true;
-            msg.innerHTML = "#";
+            newMsg("#");
             cmdIdx = await new Promise(r => { inputResolve = r; });
             inputResolve = undefined;
             cmdInput = "";
-            msg.innerHTML = "";
+            newMsg("");
             isCmdInput = false;
             return cmdIdx;
         case "shim_display_nhwindow":
@@ -557,7 +567,7 @@ async function callback(name, ...args) {
             return 0;
         case "shim_exit_nhwindows":
             clearMap();
-            msg.innerHTML += "\n" + args[0];
+            newMsg(args[0], true);
             return 0;
         default:
             return 0;
@@ -575,6 +585,21 @@ function clearMap() {
         if (curs) {
             curs.style.backgroundColor = "";
         }
+    }
+}
+
+function newMsg(text, add) {
+    if (text) {
+        prevMsgsOffset = 1;
+        skipMsgSaves = false;
+    }
+    if (msg.innerHTML && !skipMsgSaves) {
+        prevMsgs.push(msg.innerHTML);
+    }
+    if (add) {
+        msg.innerHTML += "\n" + text;
+    } else {
+        msg.innerHTML = text;
     }
 }
 
@@ -721,6 +746,7 @@ function updateMenuSelectionsMobile(windowId, incomingSelections) {
 }
 
 function updateStatus(args) {
+    prevMsgsOffset = 1; // workaround to reset prev message scrolling when a turn passes
     status.innerHTML = "";
     if (args[0] === nethackGlobal.constants.STATUS_FIELD.BL_CONDITION) {
         const conds = {};
