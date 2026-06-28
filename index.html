@@ -112,6 +112,8 @@ let synced = false;
 let syncResolve;
 const syncPromise = new Promise(r => { syncResolve = r; });
 let touchTimer;
+let disableClick = false;
+let disableClickTimer;
 const autoQueue = [];
 const autoLookMsgs = [];
 let autoLookAction = false;
@@ -201,7 +203,11 @@ if (mobile) {
         const coords = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         const key = getDirectionKeyChar(coords).toUpperCase();
         clearTimeout(touchTimer);
-        touchTimer = setTimeout(() => handleKey(key), 500);
+        touchTimer = setTimeout(() => {
+            disableClick = true; // prevent click from this same event
+            disableClickTimer = setTimeout(() => { disableClick = false; }, 500);
+            handleKey(key);
+        }, 500);
     });
     document.addEventListener("touchmove", e => {
         clearTimeout(touchTimer);
@@ -210,7 +216,7 @@ if (mobile) {
         clearTimeout(touchTimer);
     });
     document.addEventListener("click", e => {
-        if ([header, footerMsg, footer, dialog].some(el => el.contains(e.target))) {
+        if ([header, footerMsg, footer, dialog].some(el => el.contains(e.target)) || disableClick) {
             return;
         }
         if (inputResolve) {
@@ -1079,13 +1085,16 @@ function openExtDialog() {
     const extEl = document.createElement("div");
     extEl.id = "ext_elem";
     dialog.appendChild(extEl);
-    // TODO closing immediately removes elem from dialog and detects as direction input
-    addDialogOption("Escape", "Escape", extEl, () => {
+    addDialogOption("Escape", "Escape", extEl, e => {
+        e.stopPropagation(); // prevent being detected as direction click
+        e.stopImmediatePropagation();
         document.getElementById("ext_elem")?.remove();
         closeDialogIfEmpty();
     });
-    for (const option of getExtCmds()) {
-        addDialogOption(option, `#${option}`, extEl, () => {
+    for (const option of getExtCmds().filter(cmd => !wizModeCmds.includes(cmd) && !cmd.startsWith("wiz"))) {
+        addDialogOption(option, `#${option}`, extEl, e => {
+            e.stopPropagation();
+            e.stopImmediatePropagation();
             if (inputResolve) {
                 inputResolve("#".charCodeAt(0));
                 autoQueue.splice(0, autoQueue.length);
@@ -1112,7 +1121,9 @@ function addDialogOption(option, text, menu, cb) {
     if (cb) {
         el.onclick = cb;
     } else {
-        el.onclick = () => {
+        el.onclick = e => {
+            e.stopPropagation();
+            e.stopImmediatePropagation();
             handleKey(option, false);
         };
     }
@@ -1178,7 +1189,9 @@ function createMobileControls() {
         el.style.border = "1px solid lightgray";
         el.style.backgroundColor = "black";
         el.innerHTML = char;
-        el.onclick = () => {
+        el.onclick = e => {
+            e.stopPropagation();
+            e.stopImmediatePropagation();
             if (char === 'Kb') {
                 mobileKbOn = !mobileKbOn;
                 createKb();
@@ -1251,7 +1264,9 @@ function createKb(idx = 0) {
                 el.style.backgroundColor = "#555";
             }
             el.innerHTML = char;
-            el.onclick = () => {
+            el.onclick = e => {
+                e.stopPropagation();
+                e.stopImmediatePropagation();
                 if (char === 'Kb') {
                     mobileKbOn = !mobileKbOn;
                     createMobileControls();
@@ -1302,6 +1317,20 @@ function createKb(idx = 0) {
         footer.appendChild(rowEl);
     }
 }
+
+const wizModeCmds = [
+    "debugfuzzer",
+    "levelchange",
+    "lightsources",
+    "migratemons",
+    "panic",
+    "polyself",
+    "seenv",
+    "stats",
+    "timeout",
+    "vision",
+    "wmode",
+];
 
 const cp437toUnicode = {
     0: '�',
