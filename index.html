@@ -95,7 +95,7 @@
 import factory from "./wasm/nethack.js";
 
 let mobile = !document.location.href.endsWith("#pc");
-let mobileKbOn = true;
+let mobileKbOn = false;
 let shift = false;
 let ctrl = false;
 let dialogOn = false;
@@ -183,7 +183,7 @@ if (mobile) {
     document.body.style.position = "fixed";
     window.visualViewport.onresize = adjustFixedDivs;
     window.visualViewport.onscroll = adjustFixedDivs;
-    createKb();
+    createMobileControls();
     adjustFixedDivs();
     container.onmouseup = e => {
         if (inputResolve) {
@@ -424,8 +424,10 @@ async function callback(name, ...args) {
             }
             return winCount;
         case "shim_yn_function":
-            if (mobile) {
-                openYnDialog(args);
+            const options = getYnOptions(args);
+            const useDialog = mobile && options;
+            if (useDialog) {
+                openYnDialog(args[0], options);
             } else {
                 let endStr = args[1] ? " [" + args[1] + "]" : ""; 
                 msg.innerHTML += "\n" + args[0] + endStr;
@@ -435,7 +437,7 @@ async function callback(name, ...args) {
                 key = await new Promise(r => { inputResolve = r; });
             }
             inputResolve = undefined;
-            if (mobile) {
+            if (useDialog) {
                 document.getElementById("yn_elem")?.remove();
                 closeDialogIfEmpty();
             } else {
@@ -1018,25 +1020,26 @@ function openDialog(windowId) {
     }
 }
 
-function openYnDialog(args) {
-    dialog.style.display = "";
-    dialogOn = true;
-    const ynEl = document.createElement("div");
-    ynEl.id = "yn_elem";
-    const ynElText = document.createElement("div");
-    ynElText.innerHTML = args[0];
-    ynEl.appendChild(ynElText);
-    dialog.appendChild(ynEl);
+function getYnOptions(args) {
     let options;
     if (args[1]) {
         options = args[1].split("")
     } else {
         // for some reason sometimes options are in the question
         options = args[0].split("[")?.[1]?.split("]")?.[0].split("");
-        if (!options) {
-            options = ["Escape"];
-        }
     }
+    return options;
+}
+
+function openYnDialog(text, options) {
+    dialog.style.display = "";
+    dialogOn = true;
+    const ynEl = document.createElement("div");
+    ynEl.id = "yn_elem";
+    const ynElText = document.createElement("div");
+    ynElText.innerHTML = text;
+    ynEl.appendChild(ynElText);
+    dialog.appendChild(ynEl);
     for (const option of options) {
         addDialogOption(option, option, ynEl);
     }
