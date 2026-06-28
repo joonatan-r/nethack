@@ -209,7 +209,7 @@ if (mobile) {
     document.addEventListener("touchend", e => {
         clearTimeout(touchTimer);
     });
-    document.addEventListener("mouseup", e => {
+    document.addEventListener("click", e => {
         if ([header, footerMsg, footer, dialog].some(el => el.contains(e.target))) {
             return;
         }
@@ -766,6 +766,10 @@ function updateStatus(args) {
     }
 }
 
+function getExtCmdIdx(input) {
+    return getExtCmds().indexOf(input);
+}
+
 // struct ext_func_tab {
 //     uchar key;
 //     const char *ef_txt, *ef_desc;
@@ -775,14 +779,14 @@ function updateStatus(args) {
 // };
 // extern struct ext_func_tab extcmdlist[];
 // field bytes: 1, 4, 4, 4, 4, 4, with struct padding 4, 4, 4, 4, 4, 4
-function getExtCmdIdx(input) {
+function getExtCmds() {
     let str = 'dummy';
     const cmds = [];
     for (let i = 0; str !== ''; i += 24) {
         str = Module.UTF8ToString(Module.getValue(nethackGlobal.pointers.extcmdlist + i + 4, '*'));
         cmds.push(str);
     }
-    return cmds.indexOf(input);
+    return cmds;
 }
 
 async function selectMenu(args) {
@@ -1042,7 +1046,13 @@ function getYnOptions(args) {
         options = args[1].split("")
     } else {
         // for some reason sometimes options are in the question
-        options = args[0].split("[")?.[1]?.split("]")?.[0].split("");
+        // (accept only if all are letters and only one bracket pair)
+        if ((args[0].match(/\[/g) || []).length === 1) {
+            options = args[0].split("[")?.[1]?.split("]")?.[0].split("");
+        }
+        if (options?.some(o => o.toLowerCase() === o.toUpperCase())) {
+            options = undefined;
+        }
     }
     return options;
 }
@@ -1062,7 +1072,33 @@ function openYnDialog(text, options) {
     adjustFixedDivs();
 }
 
-function addDialogOption(option, text, menu) {
+function openExtDialog() {
+    dialog.style.display = "";
+    dialog.scrollTop = 0;
+    dialogOn = true;
+    const extEl = document.createElement("div");
+    extEl.id = "ext_elem";
+    dialog.appendChild(extEl);
+    // TODO closing immediately removes elem from dialog and detects as direction input
+    addDialogOption("Escape", "Escape", extEl, () => {
+        document.getElementById("ext_elem")?.remove();
+        closeDialogIfEmpty();
+    });
+    for (const option of getExtCmds()) {
+        addDialogOption(option, `#${option}`, extEl, () => {
+            if (inputResolve) {
+                inputResolve("#".charCodeAt(0));
+                autoQueue.splice(0, autoQueue.length);
+                autoQueue.push(option);
+            }
+            document.getElementById("ext_elem")?.remove();
+            closeDialogIfEmpty();
+        });
+    }
+    adjustFixedDivs();
+}
+
+function addDialogOption(option, text, menu, cb) {
     const el = document.createElement("div");
     el.style.border = "1px solid lightgray";
     el.style.backgroundColor = "black";
@@ -1073,9 +1109,13 @@ function addDialogOption(option, text, menu) {
     el.style.padding = "10px";
     el.style.margin = "5px";
     el.innerHTML = text;
-    el.onclick = () => {
-        handleKey(option, false);
-    };
+    if (cb) {
+        el.onclick = cb;
+    } else {
+        el.onclick = () => {
+            handleKey(option, false);
+        };
+    }
     menu.appendChild(el);
 }
 
@@ -1123,7 +1163,7 @@ function getClosestCoordElement(e) {
 }
 
 function createMobileControls() {
-    const chars = ['Kb', 'CmrLck', 'CmrRst'];
+    const chars = ['Kb', 'Ext', 'CmrLck', 'CmrRst'];
     footer.innerHTML = "";
     footer.style.flexDirection = "row";
     for (const char of chars) {
@@ -1138,11 +1178,12 @@ function createMobileControls() {
         el.style.border = "1px solid lightgray";
         el.style.backgroundColor = "black";
         el.innerHTML = char;
-        el.onmousedown = () => {
+        el.onclick = () => {
             if (char === 'Kb') {
                 mobileKbOn = !mobileKbOn;
                 createKb();
                 adjustFixedDivs();
+                centerIfMobile();
             } else if (char === 'CmrRst') {
                 root.style.marginLeft = 0;
                 root.style.marginTop = rootBaseMarginTop;
@@ -1152,6 +1193,8 @@ function createMobileControls() {
                 if (lockCamera) {
                     centerIfMobile();
                 }
+            } else if (char === 'Ext') {
+                openExtDialog();
             }
         };
         footer.appendChild(el);
@@ -1208,11 +1251,12 @@ function createKb(idx = 0) {
                 el.style.backgroundColor = "#555";
             }
             el.innerHTML = char;
-            el.onmousedown = () => {
+            el.onclick = () => {
                 if (char === 'Kb') {
                     mobileKbOn = !mobileKbOn;
                     createMobileControls();
                     adjustFixedDivs();
+                    centerIfMobile();
                 } else if (char === 'Shift') {
                     if (idx === 0) {
                         createKb(1);
