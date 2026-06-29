@@ -381,6 +381,7 @@ async function callback(name, ...args) {
             id = `menu_${args[0]}`;
             menu = document.getElementById(id);
             if (mobile && menu) {
+                menu.style.flex = "1";
                 textId = `${id}_text`;
                 menuText = document.getElementById(textId);
                 if (!menuText) {
@@ -448,13 +449,7 @@ async function callback(name, ...args) {
             windows.push(w);
             if (w.type === nethackGlobal.constants.WIN_TYPE.NHW_MENU) {
                 id = `menu_${w.id}`;
-                menu = document.getElementById(id);
-                if (!menu) {
-                    menu = document.createElement("div");
-                    menu.id = id;
-                    menu.style.whiteSpace = "pre-wrap";
-                    menus.appendChild(menu);
-                }
+                getOrCreateMenuMobile(id);
             }
             return winCount;
         case "shim_yn_function":
@@ -522,7 +517,7 @@ async function callback(name, ...args) {
         case "shim_display_nhwindow":
             id = `menu_${args[0]}`;
             menu = document.getElementById(id);
-            if (args[1] && mobile && menu) {
+            if (/* args[1] &&  */mobile && menu) { // TODO for now block always
                 openDialog(args[0]);
                 key = await new Promise(r => { inputResolve = r; });
             }
@@ -623,6 +618,20 @@ function newMsg(text, add) {
     }
 }
 
+function getOrCreateMenuMobile(id) {
+    let menu = document.getElementById(id);
+    if (!menu) {
+        menu = document.createElement("div");
+        menu.id = id;
+        menu.style.whiteSpace = "pre-wrap";
+        menu.style.display = "flex";
+        menu.style.flexDirection = "column";
+        menu.style.justifyContent = "end";
+        menus.appendChild(menu);
+    }
+    return menu;
+}
+
 function destroyMenu(windowId) {
     const id = `menu_${windowId}`;
     const menu = document.getElementById(id);
@@ -698,14 +707,9 @@ function updateMenuSelections(windowId, incomingSelections) {
 function addMenuMobile(args) {
     let id = `menu_${args[0]}`;
     let textId = `${id}_text`;
-    let menu = document.getElementById(id);
+    let menu = getOrCreateMenuMobile(id);
+    menu.style.flex = "1";
     let menuText = document.getElementById(textId);
-    if (!menu) {
-        menu = document.createElement("div");
-        menu.id = id;
-        menu.style.whiteSpace = "pre-wrap";
-        menus.appendChild(menu);
-    }
     if (!menuText) {
         menuText = document.createElement("div");
         menuText.id = textId;
@@ -741,7 +745,7 @@ function addMenuMobile(args) {
     if (selector) {
         addDialogOption(selector, text, menu);
     } else {
-        menuText.innerHTML += "\n" + text;
+        addDialogOption(selector, text, menu, () => null, true);
     }
 }
 
@@ -752,7 +756,7 @@ function updateMenuSelectionsMobile(windowId, incomingSelections) {
         return;
     }
     const options = Array.from(menu.children)
-        .filter(el => !el.id.endsWith("_text") && el.innerHTML !== 'Enter' && el.innerHTML !== 'Escape');
+        .filter(el => !el.className.includes("_text") && el.innerHTML !== 'Enter' && el.innerHTML !== 'Escape');
     for (const option of options) {
         let text = option.innerHTML;
         let newText = "";
@@ -1114,12 +1118,11 @@ function openYnDialog(text, options) {
     dialog.style.display = "";
     dialog.scrollTop = 0;
     dialogOn = true;
-    const ynEl = document.createElement("div");
-    ynEl.id = "yn_elem";
+    const ynEl = getOrCreateMenuMobile("yn_elem")
+    ynEl.style.flex = "1";
     const ynElText = document.createElement("div");
     ynElText.innerHTML = text;
     ynEl.appendChild(ynElText);
-    dialog.appendChild(ynEl);
     for (const option of options) {
         addDialogOption(option, option, ynEl);
     }
@@ -1155,9 +1158,14 @@ function openExtDialog() {
     adjustFixedDivs();
 }
 
-function addDialogOption(option, text, menu, cb) {
+function addDialogOption(option, text, menu, cb, onlyText) {
     const el = document.createElement("div");
-    el.style.border = "1px solid lightgray";
+    if (!onlyText) {
+        el.style.border = "1px solid lightgray";
+    } else {
+        // TODO improve, this is to work in selection update
+        el.classList.add("menu_text");
+    }
     el.style.backgroundColor = "black";
     el.style.display = "flex";
     el.style.flexDirection = "column";
