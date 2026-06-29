@@ -147,13 +147,13 @@ function handleKey(inputKey, ctrlKey, numPad) {
     if (inputResolve) {
         if (isCmdInput) {
             if (inputKey === 'Enter') {
-                inputResolve(getExtCmdIdx(cmdInput));
+                inputResolve(1);
             } else if (inputKey === 'Escape') {
                 inputResolve(-1);
             } else if (inputKey.length === 1) {
                 cmdInput += inputKey;
                 // NOTE: history should already be handled
-                msg.innerHTML = "#" + cmdInput;
+                msg.innerHTML = cmdInput;
             }
         } else if (inputKey.length === 1) {
             let key = (numPad && {
@@ -370,7 +370,14 @@ async function callback(name, ...args) {
     switch(name) {
         case "shim_player_selection_or_tty":
             return true;
+        // TODO are these needed?
+        // display_file, update_inventory, update_positionbar, init_nhwindows, status_init, status_finish,
+        // nhbell, mark_synch, wait_synch, delay_output, askname, cliparound, number_pad, suspend_nhwindows,
+        // resume_nhwindows, can_suspend, outrip, preference_update, getmsghistory
+        // case "shim_status_enablefield": // TODO
+        //     return 0;
         case "shim_putstr":
+        case "shim_putmixed": // TODO
             id = `menu_${args[0]}`;
             menu = document.getElementById(id);
             if (mobile && menu) {
@@ -387,6 +394,7 @@ async function callback(name, ...args) {
             }
             return 0;
         case "shim_raw_print":
+        case "shim_raw_print_bold":
             newMsg(args[0], true);
             return 0;
         case "shim_status_update":
@@ -493,12 +501,24 @@ async function callback(name, ...args) {
         case "shim_get_ext_cmd":
             isCmdInput = true;
             newMsg("#");
-            cmdIdx = await new Promise(r => { inputResolve = r; });
+            key = await new Promise(r => { inputResolve = r; });
+            cmdIdx = key === -1 ? key : getExtCmdIdx(cmdInput);
             inputResolve = undefined;
             cmdInput = "";
             newMsg("");
             isCmdInput = false;
             return cmdIdx;
+        case "shim_getlin":
+            isCmdInput = true;
+            newMsg(args[0]);
+            key = await new Promise(r => { inputResolve = r; });
+            let str = key === -1 ? key : cmdInput;
+            inputResolve = undefined;
+            cmdInput = "";
+            newMsg("");
+            isCmdInput = false;
+            Module.stringToUTF8(str, args[1], 256); // BUFSZ
+            return 0;
         case "shim_display_nhwindow":
             id = `menu_${args[0]}`;
             menu = document.getElementById(id);
@@ -593,7 +613,7 @@ function newMsg(text, add) {
         prevMsgsOffset = 1;
         skipMsgSaves = false;
     }
-    if (msg.innerHTML && !skipMsgSaves) {
+    if (msg.innerHTML && !text && !skipMsgSaves) {
         prevMsgs.push(msg.innerHTML);
     }
     if (add) {
@@ -1064,6 +1084,7 @@ function openDialog(windowId) {
     const menu = document.getElementById(`menu_${windowId}`);
     if (menu) {
         dialog.style.display = "";
+        dialog.scrollTop = 0;
         dialogOn = true;
         for (const option of ['Enter', 'Escape']) {
             addDialogOption(option, option, menu);
@@ -1091,6 +1112,7 @@ function getYnOptions(args) {
 
 function openYnDialog(text, options) {
     dialog.style.display = "";
+    dialog.scrollTop = 0;
     dialogOn = true;
     const ynEl = document.createElement("div");
     ynEl.id = "yn_elem";
