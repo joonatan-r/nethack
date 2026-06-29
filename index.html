@@ -230,13 +230,14 @@ if (mobile) {
             const key = getDirectionKeyChar(e);
             const tolerance = 10;
             const center = getVisualCenter();
-            if (e.target === curs) {
+            const closestAnd2ndClosest = getClosestAnd2ndClosestCell(e);
+            if (curs === closestAnd2ndClosest.closest || curs === closestAnd2ndClosest.secondClosest) {
                 autoLookAction = true;
                 inputResolve(":".charCodeAt(0));
             } else if (Math.abs(center.x - cursX) > tolerance || Math.abs(center.y - cursY) > tolerance) {
                 // if user has panned, auto travel
                 autoQueue.splice(0, autoQueue.length);
-                const coords = getCoordsFromElement(getClosestCoordElement(e));
+                const coords = getCoordsFromElement(closestAnd2ndClosest.closest);
                 const cursCoords = getCoordsFromElement(curs);
                 const horizKey = coords.x > cursCoords.x ? 'l' : 'h';
                 const vertKey = coords.y > cursCoords.y ? 'j' : 'k';
@@ -1214,20 +1215,29 @@ function getDirectionKeyChar(e) {
     }[relativeCoordsToDrc(y, x)];
 }
 
-function getClosestCoordElement(e) {
+function getClosestAnd2ndClosestCell(e) {
     let minDistance;
     let closest;
+    let secondMinDistance;
+    let secondClosest;
     for (const el of Array.from(root.children)) {
         const rect = el.getBoundingClientRect();
         const y = rect.top + (rect.height / 2);
         const x = rect.left + (rect.width / 2);
         const distanceSq = (e.x - x)*(e.x - x) + (e.y - y)*(e.y - y);
         if (!closest || (distanceSq < minDistance)) {
+            if (minDistance < secondMinDistance) {
+                secondClosest = closest;
+                secondMinDistance = minDistance;
+            }
             closest = el;
             minDistance = distanceSq;
+        } else if (!secondClosest || (distanceSq < secondMinDistance)) {
+            secondClosest = el;
+            secondMinDistance = distanceSq;
         }
     }
-    return closest;
+    return { closest, secondClosest };
 }
 
 function createMobileControls() {
