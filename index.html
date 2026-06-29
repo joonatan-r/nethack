@@ -756,7 +756,8 @@ function updateMenuSelectionsMobile(windowId, incomingSelections) {
         return;
     }
     const options = Array.from(menu.children)
-        .filter(el => !el.className.includes("_text") && el.innerHTML !== 'Enter' && el.innerHTML !== 'Escape');
+        .filter(el => !el.className.includes("_text")
+            && !el.id.endsWith("_text") && el.innerHTML !== 'Enter' && el.innerHTML !== 'Escape');
     for (const option of options) {
         let text = option.innerHTML;
         let newText = "";
