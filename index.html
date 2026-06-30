@@ -792,18 +792,20 @@ function updateStatus(args) {
             status.innerHTML += `${cond} `;
         }
     }
-    if (curs && statusMap["Hpmax"]) {
+    if (statusMap["Hpmax"]) {
         const healthPercent = Number(statusMap["Hp"]) / Number(statusMap["Hpmax"]);
         if (healthPercent > 0.75) {
-            curs.style.backgroundColor = "darkgreen";
+            cursColor = "darkgreen";
         } else if (healthPercent > 0.5) {
-            curs.style.backgroundColor = "yellow";
+            cursColor = "yellow";
         } else if (healthPercent > 0.25) {
-            curs.style.backgroundColor = "orange";
+            cursColor = "orange";
         } else {
-            curs.style.backgroundColor = "red";
+            cursColor = "red";
         }
-        cursColor = curs.style.backgroundColor;
+        if (curs) {
+            curs.style.backgroundColor = cursColor;
+        }
     }
 }
 
