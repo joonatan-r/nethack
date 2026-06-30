@@ -210,6 +210,9 @@ if (mobile) {
         touchTimer = setTimeout(() => {
             disableClick = true; // prevent click from this same event
             disableClickTimer = setTimeout(() => { disableClick = false; }, 500);
+            if (autoTravelIfPan(coords)) {
+                return;
+            }
             handleKey(key);
         }, 500);
     });
@@ -224,31 +227,11 @@ if (mobile) {
             return;
         }
         if (inputResolve) {
-            const rect = curs.getBoundingClientRect();
-            const cursX = rect.x + (rect.width / 2);
-            const cursY = rect.y + (rect.height / 2);
             const key = getDirectionKeyChar(e);
-            const tolerance = 10;
-            const center = getVisualCenter();
             const closestAnd2ndClosest = getClosestAnd2ndClosestCell(e);
             if (curs === closestAnd2ndClosest.closest || curs === closestAnd2ndClosest.secondClosest) {
                 autoLookAction = true;
                 inputResolve(":".charCodeAt(0));
-            } else if (Math.abs(center.x - cursX) > tolerance || Math.abs(center.y - cursY) > tolerance) {
-                // if user has panned, auto travel
-                autoQueue.splice(0, autoQueue.length);
-                const coords = getCoordsFromElement(closestAnd2ndClosest.closest);
-                const cursCoords = getCoordsFromElement(curs);
-                const horizKey = coords.x > cursCoords.x ? 'l' : 'h';
-                const vertKey = coords.y > cursCoords.y ? 'j' : 'k';
-                for (let i = 0; i < Math.abs(coords.x - cursCoords.x); i++) {
-                    autoQueue.push(horizKey);
-                }
-                for (let i = 0; i < Math.abs(coords.y - cursCoords.y); i++) {
-                    autoQueue.push(vertKey);
-                }
-                autoQueue.push(".");
-                inputResolve("_".charCodeAt(0));
             } else {
                 inputResolve(key.charCodeAt(0));
             }
@@ -1213,6 +1196,36 @@ function getDirectionKeyChar(e) {
         8: 'k',
         9: 'u',
     }[relativeCoordsToDrc(y, x)];
+}
+
+function autoTravelIfPan(e) {
+    if (!inputResolve) {
+        return false;
+    }
+    const rect = curs.getBoundingClientRect();
+    const cursX = rect.x + (rect.width / 2);
+    const cursY = rect.y + (rect.height / 2);
+    const key = getDirectionKeyChar(e);
+    const tolerance = 10;
+    const center = getVisualCenter();
+    const closestAnd2ndClosest = getClosestAnd2ndClosestCell(e);
+    if (Math.abs(center.x - cursX) > tolerance || Math.abs(center.y - cursY) > tolerance) {
+        autoQueue.splice(0, autoQueue.length);
+        const coords = getCoordsFromElement(closestAnd2ndClosest.closest);
+        const cursCoords = getCoordsFromElement(curs);
+        const horizKey = coords.x > cursCoords.x ? 'l' : 'h';
+        const vertKey = coords.y > cursCoords.y ? 'j' : 'k';
+        for (let i = 0; i < Math.abs(coords.x - cursCoords.x); i++) {
+            autoQueue.push(horizKey);
+        }
+        for (let i = 0; i < Math.abs(coords.y - cursCoords.y); i++) {
+            autoQueue.push(vertKey);
+        }
+        autoQueue.push(".");
+        inputResolve("_".charCodeAt(0));
+        return true;
+    }
+    return false;
 }
 
 function getClosestAnd2ndClosestCell(e) {
