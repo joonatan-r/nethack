@@ -567,6 +567,11 @@ async function callback(name, ...args) {
         case "shim_exit_nhwindows":
             clearMap();
             newMsg(args[0], true);
+            // even though auto sync is on, sync for the callback to ensure done
+            storedFS.syncfs(false, err => {
+                err && console.warn(err);
+                alert("Saved");
+            });
             return 0;
         default:
             return 0;
@@ -1320,7 +1325,7 @@ function createKb(idx = 0) {
             ['7', '8', '9'],
             ['4', '5', '6'],
             ['1', '2', '3'],
-            ['Kb', 'abc', '0', 'Esc', 'Entr']
+            ['Kb', 'abc', '0', 'Del', 'Esc', 'Entr']
         ]
     ];
     footer.innerHTML = "";
@@ -1389,6 +1394,11 @@ function createKb(idx = 0) {
                         handleKey('Enter', ctrl);
                     } else if (char === 'Spc') {
                         handleKey(' ', ctrl);
+                    } else if (char === 'Del') {
+                        if (isCmdInput && cmdInput.length) {
+                            cmdInput = cmdInput.slice(0, -1);
+                            msg.innerHTML = cmdInput;
+                        }
                     } else {
                         handleKey(char, ctrl);
                     }
