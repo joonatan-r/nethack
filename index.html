@@ -106,7 +106,6 @@ let shift = false;
 let ctrl = false;
 let dialogOn = false;
 let lockCamera = false;
-let rootBaseMarginTop = 0;
 let footerHeight = 0;
 let synced = false;
 let syncResolve;
@@ -1042,7 +1041,6 @@ function adjustFixedDivs() {
         footer.style.width = `${width * 0.98}px`;
         footerHeight = height * 0.1;
     }
-    rootBaseMarginTop = offsetTop + height * 0.1;
     if (lockCamera) {
         centerIfMobile();
     }
@@ -1079,6 +1077,9 @@ function centerIfMobile() {
 function openDialog(windowId) {
     const menu = document.getElementById(`menu_${windowId}`);
     if (menu) {
+        // ugly hack to not trigger the annoying tap + scroll zoom
+        // (present at least on Android Chrome)
+        document.body.style.touchAction = "pan-y";
         dialog.style.display = "";
         dialog.scrollTop = 0;
         dialogOn = true;
@@ -1086,6 +1087,7 @@ function openDialog(windowId) {
             addDialogOption(option, option, menu);
         }
         adjustFixedDivs();
+        setTimeout(() => { document.body.style.touchAction = ""; }, 500);
     }
 }
 
@@ -1107,6 +1109,7 @@ function getYnOptions(args) {
 }
 
 function openYnDialog(text, options) {
+    document.body.style.touchAction = "pan-y";
     dialog.style.display = "";
     dialog.scrollTop = 0;
     dialogOn = true;
@@ -1119,9 +1122,11 @@ function openYnDialog(text, options) {
         addDialogOption(option, option, ynEl);
     }
     adjustFixedDivs();
+    setTimeout(() => { document.body.style.touchAction = ""; }, 500);
 }
 
 function openExtDialog() {
+    document.body.style.touchAction = "pan-y";
     dialog.style.display = "";
     dialog.scrollTop = 0;
     dialogOn = true;
@@ -1148,6 +1153,7 @@ function openExtDialog() {
         });
     }
     adjustFixedDivs();
+    setTimeout(() => { document.body.style.touchAction = ""; }, 500);
 }
 
 function addDialogOption(option, text, menu, cb, onlyText) {
@@ -1286,7 +1292,7 @@ function createMobileControls() {
                 centerIfMobile();
             } else if (char === 'CmrRst') {
                 root.style.marginLeft = 0;
-                root.style.marginTop = rootBaseMarginTop;
+                root.style.marginTop = 0;
             } else if (char === 'CmrLck') {
                 lockCamera = !lockCamera;
                 el.style.backgroundColor = lockCamera ? "#555" : "black";
