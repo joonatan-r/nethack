@@ -140,6 +140,7 @@ const colno = 80;
 let curs;
 let cursColor = "darkgreen";
 const colorsByCoords = {};
+const bgColorsByCoords = {};
 const selectorsByMenu = {};
 const incSelectionsByMenu = {};
 const statusMap = {};
@@ -433,14 +434,22 @@ async function callback(name, ...args) {
             const c = cp437toUnicode[Module.getValue(args[3] + 4, 'i32')];
             document.getElementById(`${x}_${y}`).innerHTML = c;
             // structs within structs are as is in memory, not as pointer
-            const color = getColor(Module.getValue(args[3] + 16, 'i32'));
+            const glyphFlags = Module.getValue(args[3] + 12, 'i32');
+            let color = getColor(Module.getValue(args[3] + 16, 'i32'));
+            let bgColor = "";
+            if (glyphFlags & nethackGlobal.constants.MG.MG_PET || glyphFlags & nethackGlobal.constants.MG.MG_OBJPILE) {
+                bgColor = color;
+                color = "black";
+            }
             document.getElementById(`${x}_${y}`).style.color = color;
+            document.getElementById(`${x}_${y}`).style.backgroundColor = bgColor;
             colorsByCoords[`${x}_${y}`] = color;
+            bgColorsByCoords[`${x}_${y}`] = bgColor;
             return 0;
         case "shim_curs":
             if (curs) {
                 curs.style.color = colorsByCoords[curs.id] || "";
-                curs.style.backgroundColor = "";
+                curs.style.backgroundColor = bgColorsByCoords[curs.id] || "";
             }
             curs = document.getElementById(`${args[1]}_${args[2]}`);
             curs.style.color = "black";
