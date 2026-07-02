@@ -80,6 +80,7 @@
             flex-direction: column;
             align-items: center;
             background-color: rgba(0, 0, 0, 0.8);
+            z-index: 2;
         }
         #padDiv {
             height: 0;
@@ -93,6 +94,18 @@
             margin: 0;
             padding: 0;
         }
+        #floatBtn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            margin: 0;
+            padding: 0;
+            border: 1px solid darkgray;
+            z-index: 10;
+            background-color: black;
+        }
     </style>
   </head>
   <body>
@@ -100,6 +113,7 @@
     <div id="footerMsg"></div>
     <div id="footer"></div>
     <div id="dialog"></div>
+    <div id="floatBtn"></div>
     <div id="container">
         <div id="status"></div>
         <div id="padDiv"></div>
@@ -119,6 +133,7 @@ let mobileKbOn = false;
 let shift = false;
 let ctrl = false;
 let dialogOn = false;
+let floatBtnOn = false;
 let lockCamera = false;
 let footerHeight = 0;
 let synced = false;
@@ -156,6 +171,7 @@ const header = document.getElementById("header");
 const footer = document.getElementById("footer");
 const footerMsg = document.getElementById("footerMsg");
 const dialog = document.getElementById("dialog");
+const floatBtn = document.getElementById("floatBtn");
 const padDiv = document.getElementById("padDiv");
 const padDiv2 = document.getElementById("padDiv2");
 
@@ -216,7 +232,7 @@ if (mobile) {
     adjustFixedDivs();
     document.addEventListener("touchstart", e => {
         if ([header, footerMsg, footer, dialog].some(el => el.contains(e.target))
-            || e.touches?.length > 1
+            || e.touches?.length > 1 || floatBtnOn 
         ) {
             return;
         }
@@ -239,7 +255,7 @@ if (mobile) {
         clearTimeout(touchTimer);
     });
     document.addEventListener("click", e => {
-        if ([header, footerMsg, footer, dialog].some(el => el.contains(e.target)) || disableClick) {
+        if ([header, footerMsg, footer, dialog].some(el => el.contains(e.target)) || disableClick || floatBtnOn) {
             return;
         }
         if (inputResolve) {
@@ -253,11 +269,23 @@ if (mobile) {
             }
         }
     });
+    floatBtn.onclick = () => {
+        if (dialogOn) {
+            dialog.style.display = "none";
+            dialogOn = false;
+            floatBtn.innerHTML = "+";
+        } else {
+            initDialog();
+            adjustFixedDivs();
+        }
+    };
+    floatBtn.style.display = "none";
 } else {
     header.style.display = "none";
     footerMsg.style.display = "none";
     footer.style.display = "none";
     dialog.style.display = "none";
+    floatBtn.style.display = "none";
     document.onkeydown = e => handleKey(e.key, e.ctrlKey, e.location === 3);
 }
 
@@ -614,10 +642,8 @@ function clearMap() {
             const e = document.getElementById(`${j + 1}_${i}`);
             if (e) {
                 e.innerHTML = "";
+                e.style.backgroundColor = "";
             }
-        }
-        if (curs) {
-            curs.style.backgroundColor = "";
         }
     }
 }
@@ -1031,6 +1057,10 @@ function relativeCoordsToDrc(y, x) {
 
 function adjustFixedDivs() {
     const { offsetTop, offsetLeft, height, width, scale } = window.visualViewport;
+    floatBtn.style.top = `${offsetTop + (height * 0.11)}px`;
+    floatBtn.style.left = `${offsetLeft + (width * 0.93)}px`;
+    floatBtn.style.height = `${width * 0.05}px`;
+    floatBtn.style.width = `${width * 0.05}px`;
     if (dialogOn) {
         dialog.style.top = `${offsetTop}px`;
         dialog.style.left = `${offsetLeft}px`;
@@ -1041,7 +1071,6 @@ function adjustFixedDivs() {
             el.style.margin = `${width * 0.01}px`;
             el.style.padding = `${width * 0.02}px`;
         }
-        return;
     }
     header.style.top = `${offsetTop}px`;
     header.style.left = `${offsetLeft}px`;
@@ -1113,17 +1142,12 @@ function centerIfMobile() {
 function openDialog(windowId) {
     const menu = document.getElementById(`menu_${windowId}`);
     if (menu) {
-        // ugly hack to not trigger the annoying tap + scroll zoom
-        // (present at least on Android Chrome)
-        document.body.style.touchAction = "pan-y";
-        dialog.style.display = "";
-        dialog.scrollTop = 0;
-        dialogOn = true;
+        initDialog();
+        initFloatBtn();
         for (const option of ['Enter', 'Escape']) {
             addDialogOption(option, option, menu);
         }
         adjustFixedDivs();
-        setTimeout(() => { document.body.style.touchAction = ""; }, 500);
     }
 }
 
@@ -1145,10 +1169,8 @@ function getYnOptions(args) {
 }
 
 function openYnDialog(text, options) {
-    document.body.style.touchAction = "pan-y";
-    dialog.style.display = "";
-    dialog.scrollTop = 0;
-    dialogOn = true;
+    initDialog();
+    initFloatBtn();
     const ynEl = getOrCreateMenuMobile("yn_elem")
     ynEl.style.flex = "1";
     const ynElText = document.createElement("div");
@@ -1158,14 +1180,11 @@ function openYnDialog(text, options) {
         addDialogOption(option, option, ynEl);
     }
     adjustFixedDivs();
-    setTimeout(() => { document.body.style.touchAction = ""; }, 500);
 }
 
 function openExtDialog() {
-    document.body.style.touchAction = "pan-y";
-    dialog.style.display = "";
-    dialog.scrollTop = 0;
-    dialogOn = true;
+    initDialog();
+    initFloatBtn();
     const extEl = document.createElement("div");
     extEl.id = "ext_elem";
     dialog.appendChild(extEl);
@@ -1189,7 +1208,6 @@ function openExtDialog() {
         });
     }
     adjustFixedDivs();
-    setTimeout(() => { document.body.style.touchAction = ""; }, 500);
 }
 
 function addDialogOption(option, text, menu, cb, onlyText) {
@@ -1220,11 +1238,29 @@ function addDialogOption(option, text, menu, cb, onlyText) {
     menu.appendChild(el);
 }
 
+function initDialog() {
+    // ugly hack to not trigger the annoying tap + scroll zoom
+    // (present at least on Android Chrome)
+    document.body.style.touchAction = "pan-y";
+    setTimeout(() => { document.body.style.touchAction = ""; }, 500);
+    dialog.style.display = "";
+    dialog.scrollTop = 0;
+    dialogOn = true;
+    floatBtn.innerHTML = "-";
+}
+
+function initFloatBtn() {
+    floatBtnOn = true;
+    floatBtn.style.display = "";
+}
+
 function closeDialogIfEmpty() {
     if (mobile && !Array.from(dialog.children).some(el => el.id?.startsWith("menu"))) {
         dialogOn = false;
         dialog.innerHTML = "";
         dialog.style.display = "none";
+        floatBtnOn = false;
+        floatBtn.style.display = "none";
         adjustFixedDivs();
     }
 }
