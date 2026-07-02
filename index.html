@@ -132,6 +132,7 @@ let mobile = !document.location.href.endsWith("#pc");
 let mobileKbOn = false;
 let shift = false;
 let ctrl = false;
+let meta = false;
 let dialogOn = false;
 let floatBtnOn = false;
 let lockCamera = false;
@@ -175,7 +176,7 @@ const floatBtn = document.getElementById("floatBtn");
 const padDiv = document.getElementById("padDiv");
 const padDiv2 = document.getElementById("padDiv2");
 
-function handleKey(inputKey, ctrlKey, numPad) {
+function handleKey(inputKey, ctrlKey, metaKey, numPad) {
     if (inputResolve) {
         if (isCmdInput) {
             if (inputKey === 'Enter') {
@@ -201,6 +202,8 @@ function handleKey(inputKey, ctrlKey, numPad) {
             let code = key.charCodeAt(0);
             if (ctrlKey) {
                 code -= 96;
+            } else if (metaKey) {
+                code = 0x80 | code;
             }
             inputResolve(code);
         } else {
@@ -286,7 +289,7 @@ if (mobile) {
     footer.style.display = "none";
     dialog.style.display = "none";
     floatBtn.style.display = "none";
-    document.onkeydown = e => handleKey(e.key, e.ctrlKey, e.location === 3);
+    document.onkeydown = e => handleKey(e.key, e.ctrlKey, e.altKey, e.location === 3);
 }
 
 for (let i = 0; i < rowno; i++) {
@@ -1232,7 +1235,7 @@ function addDialogOption(option, text, menu, cb, onlyText) {
         el.onclick = e => {
             e.stopPropagation();
             e.stopImmediatePropagation();
-            handleKey(option, false);
+            handleKey(option);
         };
     }
     menu.appendChild(el);
@@ -1396,7 +1399,7 @@ function createKb(idx = 0) {
         [
             ['`', '\\', '$', '=', '/', '_', '<', '>', '[', ']'],
             ['!', '@', '#', '?', '%', '^', '&', '*', '(', ')'],
-            ['Ctrl', '-', '\'', '"', ':', ';', ',', '.'],
+            ['Ctrl', 'Mt', '-', '\'', '"', ':', ';', ',', '.'],
             ['Kb', 'abc', '123', 'Spc', 'Esc', 'Entr']
         ],
         [
@@ -1425,7 +1428,7 @@ function createKb(idx = 0) {
             el.style.overflow = "hidden";
             el.style.border = "1px solid lightgray";
             el.style.backgroundColor = "black";
-            if (idx === 1 && char === 'Shift' || ctrl && char === 'Ctrl') {
+            if (idx === 1 && char === 'Shift' || ctrl && char === 'Ctrl' || meta && char === 'Mt') {
                 el.style.backgroundColor = "#555";
             }
             el.innerHTML = char;
@@ -1448,6 +1451,9 @@ function createKb(idx = 0) {
                 } else if (char === 'Ctrl') {
                     ctrl = !ctrl;
                     el.style.backgroundColor = ctrl ? "#555" : "black";
+                } else if (char === 'Mt') {
+                    meta = !meta;
+                    el.style.backgroundColor = meta ? "#555" : "black";
                 } else if (char === 'Sym') {
                     createKb(2);
                     adjustFixedDivs();
@@ -1467,18 +1473,18 @@ function createKb(idx = 0) {
                         adjustFixedDivs();
                     }
                     if (char === 'Esc') {
-                        handleKey('Escape', ctrl);
+                        handleKey('Escape', ctrl, meta);
                     } else if (char === 'Entr') {
-                        handleKey('Enter', ctrl);
+                        handleKey('Enter', ctrl, meta);
                     } else if (char === 'Spc') {
-                        handleKey(' ', ctrl);
+                        handleKey(' ', ctrl, meta);
                     } else if (char === 'Del') {
                         if (isCmdInput && cmdInput.length) {
                             cmdInput = cmdInput.slice(0, -1);
                             msg.innerHTML = cmdInput;
                         }
                     } else {
-                        handleKey(char, ctrl);
+                        handleKey(char, ctrl, meta);
                     }
                 }
             };
