@@ -1256,7 +1256,7 @@ function createKb(idx = 0) {
                     }
                     if (meta) {
                         meta = false;
-                        createKb(idx);
+                        createKb(idx === 1 ? 0 : idx);
                         adjustFixedDivs();
                     }
                 }
