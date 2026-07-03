@@ -2,6 +2,7 @@
 <html lang="en-US">
   <head>
     <meta charset="utf-8" />
+    <link rel="manifest" href="manifest.json" />
     <title>Nethack</title>
     <style>
         * {
@@ -1247,6 +1248,16 @@ function createKb(idx = 0) {
                         }
                     } else {
                         handleKey(char, ctrl, meta);
+                    }
+                    if (ctrl) {
+                        ctrl = false;
+                        createKb(idx === 1 ? 0 : idx);
+                        adjustFixedDivs();
+                    }
+                    if (meta) {
+                        meta = false;
+                        createKb(idx);
+                        adjustFixedDivs();
                     }
                 }
             };
