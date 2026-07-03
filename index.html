@@ -29,6 +29,10 @@
             width: 12px;
             height: 22px;
         }
+        #menus p {
+            margin: 0;
+            padding: 0;
+        }
         #msg {
             white-space: pre;
         }
@@ -162,6 +166,7 @@ const colorsByCoords = {};
 const bgColorsByCoords = {};
 const selectorsByMenu = {};
 const incSelectionsByMenu = {};
+const openPageByWindow = {};
 const statusMap = {};
 let condsMap = {};
 const prevMsgs = [];
@@ -412,10 +417,8 @@ async function callback(name, ...args) {
             //     int color;
             //     int symidx;
             // };
-            // const c = String.fromCharCode(Module.getValue(args[3] + 4, 'i32'));
             const c = cp437toUnicode[Module.getValue(args[3] + 4, 'i32')];
             document.getElementById(`${x}_${y}`).innerHTML = c;
-            // structs within structs are as is in memory, not as pointer
             const glyphFlags = Module.getValue(args[3] + 12, 'i32');
             let color = getColor(Module.getValue(args[3] + 16, 'i32'));
             let bgColor = "";
@@ -445,7 +448,7 @@ async function callback(name, ...args) {
             windows.push(w);
             if (w.type === nethackGlobal.constants.WIN_TYPE.NHW_MENU) {
                 id = `menu_${w.id}`;
-                getOrCreateMenuMobile(id);
+                getOrCreateMenu(id);
             }
             return winCount;
         case "shim_yn_function":
@@ -515,6 +518,7 @@ async function callback(name, ...args) {
             menu = document.getElementById(id);
             if (/* args[1] &&  */mobile && menu) { // TODO for now block always
                 openDialog(args[0]);
+                addBaseDialogOptions(args[0]);
                 key = await new Promise(r => { inputResolve = r; });
             }
             return 0;
@@ -539,11 +543,7 @@ async function callback(name, ...args) {
             if (windows.find(w => w.id === args[0]).permInventory) {
                 return 0;
             }
-            if (mobile) {
-                addMenuMobile(args)
-            } else {
-                addMenu(args);
-            }
+            addMenuLine(args);
             return 0;
         case "shim_select_menu":
             if (windows.find(w => w.id === args[0]).permInventory) {
@@ -558,17 +558,12 @@ async function callback(name, ...args) {
             if (incomingSelections === -1 || incomingSelections === 0) {
                 return incomingSelections;
             }
-            return getMenuSelect(args[0], args[1], args[2], incomingSelections);
+            return sendSelections(args[0], args[1], args[2], incomingSelections);
         case "shim_end_menu":
             id = `menu_${args[0]}`;
-            menu = document.getElementById(id);
             menuText = document.getElementById(`${id}_text`);
-            if (menu) {
-                if (mobile && menuText) {
-                    menuText.innerHTML += "\n" + args[1];
-                } else {
-                    menu.innerHTML += "\n" + args[1];
-                }
+            if (menuText) {
+                menuText.innerHTML += "\n" + args[1];
             }
             return 0;
         case "shim_clear_nhwindow":
@@ -672,7 +667,7 @@ function updateStatus(args) {
     }
 }
 
-function getOrCreateMenuMobile(id) {
+function getOrCreateMenu(id) {
     let menu = document.getElementById(id);
     if (!menu) {
         menu = document.createElement("div");
@@ -692,76 +687,16 @@ function destroyMenu(windowId) {
     if (menu) {
         delete selectorsByMenu[id];
         delete incSelectionsByMenu[id];
+        delete openPageByWindow[windowId];
         menu.remove();
     }
     closeDialogIfEmpty();
 }
 
-function addMenu(args) {
-    let id = `menu_${args[0]}`;
-    let menu = document.getElementById(id);
-    if (!menu) {
-        menu = document.createElement("div");
-        menu.id = id;
-        menu.style.whiteSpace = "pre-wrap";
-        menus.appendChild(menu);
-    }
-    let isPreSelect = args[8] & 0x00000001;
-    let separator = isPreSelect ? " + " : " - ";
-    if (!args[2]) {
-        separator = "";
-    }
-    let selector = "";
-    if (args[3]) {
-        selector = args[3] ? String.fromCharCode(args[3]) : "";
-    } else if (args[2]) { // selectable but need to handle selector options manually
-        if (!selectorsByMenu[id]) {
-            selector = getNextChar();
-            selectorsByMenu[id] = [selector];
-        } else {
-            selector = getNextChar(selectorsByMenu[id][0]);
-            selectorsByMenu[id].unshift(selector);
-        }
-    }
-    if (isPreSelect) {
-        if (!incSelectionsByMenu[id]) {
-            incSelectionsByMenu[id] = [];
-        }
-        incSelectionsByMenu[id].push(selector.charCodeAt(0));
-    }
-    if (selector !== "") {
-        windows.find(w => w.id === args[0]).selections[selector] = args[2];
-    }
-    menu.innerHTML += "\n" + selector + separator + escapeHtml(args[7]);
-}
-
-// TODO make cleaner
-function updateMenuSelections(windowId, incomingSelections) {
-    const id = `menu_${windowId}`;
-    const menu = document.getElementById(id);
-    if (!menu) {
-        return;
-    }
-    let text = menu.innerHTML;
-    let newText = "";
-    const lines = text.split("\n");
-    lines.shift(); // remove start empty line
-    for (const line of lines) {
-        if (line.substring(1, 4) !== " + " && line.substring(1, 4) !== " - ") {
-            newText += "\n" + line;
-        }else if (incomingSelections.includes(line.charCodeAt(0))) {
-            newText += "\n" + line.charAt(0) + " + " + line.substring(4);
-        } else {
-            newText += "\n" + line.charAt(0) + " - " + line.substring(4);
-        }
-    }
-    menu.innerHTML = newText;
-}
-
-function addMenuMobile(args) {
+function addMenuLine(args) {
     let id = `menu_${args[0]}`;
     let textId = `${id}_text`;
-    let menu = getOrCreateMenuMobile(id);
+    let menu = getOrCreateMenu(id);
     menu.style.flex = "1";
     let menuText = document.getElementById(textId);
     if (!menuText) {
@@ -775,82 +710,193 @@ function addMenuMobile(args) {
         separator = "";
     }
     let selector = "";
+    const prevPage = (selectorsByMenu[id] || [])[0]?.page || 0;
+    let page = prevPage;
     if (args[3]) {
         selector = args[3] ? String.fromCharCode(args[3]) : "";
     } else if (args[2]) { // selectable but need to handle selector options manually
         if (!selectorsByMenu[id]) {
             selector = getNextChar();
-            selectorsByMenu[id] = [selector];
+            selectorsByMenu[id] = [{ selector, page: 0 }];
         } else {
-            selector = getNextChar(selectorsByMenu[id][0]);
-            selectorsByMenu[id].unshift(selector);
+            selector = getNextChar(selectorsByMenu[id][0].selector);
+            page = selector === "a" ? prevPage + 1 : prevPage;
+            selectorsByMenu[id].unshift({ selector, page });
         }
     }
     if (isPreSelect) {
         if (!incSelectionsByMenu[id]) {
             incSelectionsByMenu[id] = [];
         }
-        incSelectionsByMenu[id].push(selector.charCodeAt(0));
+        incSelectionsByMenu[id].push({ selector, page });
     }
     if (selector !== "") {
-        windows.find(w => w.id === args[0]).selections[selector] = args[2];
+        windows.find(w => w.id === args[0]).selections[`${selector}_${page}`] = args[2];
     }
-    const text = selector + separator + escapeHtml(args[7]);
-    if (selector) {
-        addDialogOption(selector, text, menu);
+    const text = selector + separator + escapeHtmlWrite(args[7]);
+    if (mobile) {
+        if (selector) {
+            addDialogOption(selector, page, text, menu);
+        } else {
+            addDialogOption(selector, page, text, menu, () => null, true);
+        }
     } else {
-        addDialogOption(selector, text, menu, () => null, true);
+        if (selector) {
+            menuText.innerHTML += `<p class="page_${page}">${text}</p>`;
+        } else {
+            menuText.innerHTML += `<p class="page_${page} menu_text">${text}</p>`;
+        }
     }
 }
 
-function updateMenuSelectionsMobile(windowId, incomingSelections) {
+function updateSelectionVisuals(windowId, incomingSelections) {
+    const id = `menu_${windowId}`;
+    const openPage = openPageByWindow[windowId] || 0;
+    let options;
+    if (mobile) {
+        const menu = document.getElementById(id);
+        if (!menu) {
+            return;
+        }
+        // Next and prev page options fit selection format so no need to filter
+        options = Array.from(menu.children)
+            .filter(el => !el.className.includes("_text")
+                && !el.id.endsWith("_text")
+                && el.className.includes(`page_${openPage}`)
+                && el.innerHTML !== 'Enter'
+                && el.innerHTML !== 'Escape'
+            );
+    } else {
+        const textId = `${id}_text`;
+        const menuText = document.getElementById(textId);
+        if (!menuText) {
+            return;
+        }
+        options = Array.from(menuText.children)
+            .filter(el => !el.className.includes("_text")
+                && el.className.includes(`page_${openPage}`)
+            );
+    }
+    for (const option of options) {
+        let text = escapeHtmlRead(option.innerHTML);
+        let newText = "";
+        if (incomingSelections.some(s => s.selector === text.charAt(0) && s.page === openPage)) {
+            newText += text.charAt(0) + " + " + text.substring(4);
+        } else {
+            newText += text.charAt(0) + " - " + text.substring(4);
+        }
+        option.innerHTML = escapeHtmlWrite(newText);
+    }
+}
+
+function updateOptionsToOpenPage(windowId) {
     const id = `menu_${windowId}`;
     const menu = document.getElementById(id);
     if (!menu) {
         return;
     }
-    const options = Array.from(menu.children)
-        .filter(el => !el.className.includes("_text")
-            && !el.id.endsWith("_text") && el.innerHTML !== 'Enter' && el.innerHTML !== 'Escape');
-    for (const option of options) {
-        let text = option.innerHTML;
-        let newText = "";
-        if (incomingSelections.includes(text.charCodeAt(0))) {
-            newText += text.charAt(0) + " + " + text.substring(4);
-        } else {
-            newText += text.charAt(0) + " - " + text.substring(4);
+    let parent;
+    if (mobile) {
+        parent = menu;
+    } else {
+        const textId = `${id}_text`;
+        const menuText = document.getElementById(textId);
+        if (!menuText) {
+            return;
         }
-        option.innerHTML = newText;
+        parent = menuText;
     }
+    const openPage = openPageByWindow[windowId] || 0;
+    const maxPage = (selectorsByMenu[id] || [])[0]?.page || 0;
+    const alwaysInclude = ["enter_elem", "escape_elem"];
+    if (maxPage > openPage) {
+        alwaysInclude.push("nextpage_elem");
+    }
+    if (openPage > 0) {
+        alwaysInclude.push("prevpage_elem");
+    }
+    let nextPageEl = document.getElementById("nextpage_elem");
+    if (!nextPageEl) {
+        if (mobile) {
+            nextPageEl = addDialogOption(">", -1, "> - Next page", parent);
+            nextPageEl.id = "nextpage_elem";
+        } else {
+            parent.innerHTML += `<p id="nextpage_elem">${"> - Next page"}</p>`;
+        }
+    }
+    let prevPageEl = document.getElementById("prevpage_elem");
+    if (!prevPageEl) {
+        if (mobile) {
+            prevPageEl = addDialogOption("<", -1, "< - Previous page", parent);
+            prevPageEl.id = "prevpage_elem";
+        } else {
+            parent.innerHTML += `<p id="prevpage_elem">${"< - Previous page"}</p>`;
+        }
+    }
+    if (mobile) {
+        let enterEl = document.getElementById("enter_elem");
+        if (!enterEl) {
+            enterEl = addDialogOption("Enter", -1, "Enter", parent);
+            enterEl.id = "enter_elem";
+        }
+        let escapeEl = document.getElementById("escape_elem");
+        if (!escapeEl) {
+            escapeEl = addDialogOption("Escape", -1, "Escape", parent);
+            escapeEl.id = "escape_elem";
+        }
+    }
+    Array.from(parent.children).forEach(el => {
+        if (el.className.includes(`page_${openPage}`)
+            || alwaysInclude.includes(el.id)
+            || el.id.endsWith("_text")
+        ) {
+            el.style.display = "";
+        } else {
+            el.style.display = "none";
+        }
+    });
 }
 
 async function selectMenu(args) {
-    let id = `menu_${args[0]}`;
+    const id = `menu_${args[0]}`;
     if (!incSelectionsByMenu[id]) {
         incSelectionsByMenu[id] = [];
     }
     let existingIdx = -1;
     let key;
+    let openPage = openPageByWindow[args[0]] || 0;
     while (true) {
+        updateOptionsToOpenPage(args[0]);
+        openPage = openPageByWindow[args[0]] || 0;
         key = await new Promise(r => { inputResolve = r; });
         if (key === 13) {
             break;
-        }
-        existingIdx = incSelectionsByMenu[id].indexOf(key);
-        if (key === 27) {
+        } else if (key === 27) {
             incSelectionsByMenu[id] = [];
             destroyMenu(args[0]);
             return -1;
-        } else if (existingIdx !== -1) {
+        } else if (key === ">".charCodeAt(0)) {
+            const maxPage = (selectorsByMenu[id] || [])[0]?.page;
+            if (openPage < maxPage) {
+                if (!openPageByWindow[args[0]]) {
+                    openPageByWindow[args[0]] = 0;
+                }
+                openPageByWindow[args[0]]++;
+            }
+            continue;
+        } else if (key === "<".charCodeAt(0)) {
+            if (openPage > 0) {
+                openPageByWindow[args[0]]--;
+            }
+            continue;
+        }
+        existingIdx = incSelectionsByMenu[id].findIndex(s => s.selector.charCodeAt(0) === key && s.page === openPage);
+        if (existingIdx !== -1) {
             incSelectionsByMenu[id].splice(existingIdx, 1);
         } else {
-            incSelectionsByMenu[id].push(key);
+            incSelectionsByMenu[id].push({ selector: String.fromCharCode(key), page: openPage });
         }
-        if (mobile) {
-            updateMenuSelectionsMobile(args[0], incSelectionsByMenu[id]);
-        } else {
-            updateMenuSelections(args[0], incSelectionsByMenu[id]);
-        }
+        updateSelectionVisuals(args[0], incSelectionsByMenu[id]);
         if (args[1] === nethackGlobal.constants.MENU_SELECT.PICK_ONE) {
             break;
         }
@@ -859,8 +905,8 @@ async function selectMenu(args) {
     if (args[1] === nethackGlobal.constants.MENU_SELECT.PICK_NONE) {
         return 0;
     }
-    let incomingSelections = incSelectionsByMenu[id];
-    incSelectionsByMenu[`menu_${args[0]}`] = [];
+    const incomingSelections = incSelectionsByMenu[id];
+    incSelectionsByMenu[id] = [];
     return incomingSelections;
 }
 
@@ -898,11 +944,11 @@ async function selectMenu(args) {
 //     unsigned itemflags;
 // } menu_item;
 // 8, 4, 4
-function getMenuSelect(window, how, selected, incomingSelections) {
+function sendSelections(window, how, selected, incomingSelections) {
     destroyMenu(window);
     const validSelections = [];
     for (const inc of incomingSelections) {
-        const selection = windows.find(w => w.id === window).selections[String.fromCharCode(inc)];
+        const selection = windows.find(w => w.id === window).selections[`${inc.selector}_${inc.page}`];
         if (!selection) {
             continue;
         }
@@ -922,14 +968,23 @@ function getMenuSelect(window, how, selected, incomingSelections) {
     return validSelections.length;
 }
 
+function addBaseDialogOptions(windowId) {
+    const id = `menu_${windowId}`;
+    const menu = document.getElementById(id);
+    if (menu) {
+        const page = openPageByWindow[windowId] || 0;
+        for (const option of ['Enter', 'Escape']) {
+            addDialogOption(option, page, option, menu);
+        }
+    }
+}
+
 function openDialog(windowId) {
-    const menu = document.getElementById(`menu_${windowId}`);
+    const id = `menu_${windowId}`;
+    const menu = document.getElementById(id);
     if (menu) {
         initDialog();
         initFloatBtn();
-        for (const option of ['Enter', 'Escape']) {
-            addDialogOption(option, option, menu);
-        }
         adjustFixedDivs();
     }
 }
@@ -954,13 +1009,13 @@ function getYnOptions(args) {
 function openYnDialog(text, options) {
     initDialog();
     initFloatBtn();
-    const ynEl = getOrCreateMenuMobile("yn_elem")
+    const ynEl = getOrCreateMenu("yn_elem")
     ynEl.style.flex = "1";
     const ynElText = document.createElement("div");
     ynElText.innerHTML = text;
     ynEl.appendChild(ynElText);
     for (const option of options) {
-        addDialogOption(option, option, ynEl);
+        addDialogOption(option, 0, option, ynEl);
     }
     adjustFixedDivs();
 }
@@ -971,14 +1026,14 @@ function openExtDialog() {
     const extEl = document.createElement("div");
     extEl.id = "ext_elem";
     dialog.appendChild(extEl);
-    addDialogOption("Escape", "Escape", extEl, e => {
+    addDialogOption("Escape", 0, "Escape", extEl, e => {
         e.stopPropagation(); // prevent being detected as direction click
         e.stopImmediatePropagation();
         document.getElementById("ext_elem")?.remove();
         closeDialogIfEmpty();
     });
     for (const option of getExtCmds().filter(cmd => !wizModeCmds.includes(cmd) && !cmd.startsWith("wiz"))) {
-        addDialogOption(option, `#${option}`, extEl, e => {
+        addDialogOption(option, 0, `#${option}`, extEl, e => {
             e.stopPropagation();
             e.stopImmediatePropagation();
             if (inputResolve) {
@@ -993,14 +1048,14 @@ function openExtDialog() {
     adjustFixedDivs();
 }
 
-function addDialogOption(option, text, menu, cb, onlyText) {
+function addDialogOption(option, page, text, menu, cb, onlyText) {
     const el = document.createElement("div");
     if (!onlyText) {
         el.style.border = "1px solid lightgray";
     } else {
-        // TODO improve, this is to work in selection update
         el.classList.add("menu_text");
     }
+    el.classList.add(`page_${page}`);
     el.style.backgroundColor = "black";
     el.style.display = "flex";
     el.style.flexDirection = "column";
@@ -1019,6 +1074,7 @@ function addDialogOption(option, text, menu, cb, onlyText) {
         };
     }
     menu.appendChild(el);
+    return el;
 }
 
 function initDialog() {
@@ -1135,7 +1191,7 @@ function createKb(idx = 0) {
             el.style.overflow = "hidden";
             el.style.border = "1px solid lightgray";
             el.style.backgroundColor = "black";
-            if (idx === 1 && char === 'Shift' || ctrl && char === 'Ctrl' || meta && char === 'Mt') {
+            if ((idx === 1 && char === 'Shift') || (ctrl && char === 'Ctrl') || (meta && char === 'Mt')) {
                 el.style.backgroundColor = "#555";
             }
             el.innerHTML = char;
@@ -1150,11 +1206,10 @@ function createKb(idx = 0) {
                 } else if (char === 'Shift') {
                     if (idx === 0) {
                         createKb(1);
-                        adjustFixedDivs();
                     } else {
                         createKb(0);
-                        adjustFixedDivs();
                     }
+                    adjustFixedDivs();
                 } else if (char === 'Ctrl') {
                     ctrl = !ctrl;
                     el.style.backgroundColor = ctrl ? "#555" : "black";
@@ -1476,7 +1531,6 @@ function getExtCmds() {
     return cmds;
 }
 
-// TODO fix if more options than these
 function getNextChar(char) {
     if (!char) {
         return "a";
@@ -1484,17 +1538,28 @@ function getNextChar(char) {
     const code = char.charCodeAt(0) + 1;
     if (code > "z".charCodeAt(0)) {
         return "A";
+    } else if (code > "Z".charCodeAt(0) && code < "a".charCodeAt(0)) {
+        return "a";
     }
     return String.fromCharCode(code);
 }
 
-function escapeHtml(str) {
+function escapeHtmlWrite(str) {
     return str
         .replaceAll("&", "&amp;")
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
+}
+
+function escapeHtmlRead(str) {
+    return str
+        .replaceAll("&amp;", "&")
+        .replaceAll("&lt;", "<")
+        .replaceAll("&gt;", ">")
+        .replaceAll("&quot;", '"')
+        .replaceAll("&#039;", "'");
 }
 
 const wizModeCmds = [
