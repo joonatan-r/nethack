@@ -375,8 +375,10 @@ async function callback(name, ...args) {
         // display_file, update_inventory, update_positionbar, init_nhwindows, status_init, status_finish,
         // nhbell, mark_synch, wait_synch, delay_output, askname, cliparound, number_pad, suspend_nhwindows,
         // resume_nhwindows, can_suspend, outrip, preference_update, getmsghistory
-        // case "shim_status_enablefield": // TODO
+        // case "shim_status_enablefield":
         //     return 0;
+        // case "shim_message_menu":
+        //     newMsg(args[0], true);
         case "shim_putstr":
         case "shim_putmixed": // TODO
             id = `menu_${args[0]}`;
@@ -480,8 +482,6 @@ async function callback(name, ...args) {
                 newMsg("");
             }
             return key;
-        // case "shim_message_menu":
-        //     newMsg(args[0], true); // TODO is this needed?
         case "shim_nhgetch":
         case "shim_nh_poskey":
             key = await new Promise(r => { inputResolve = r; });
@@ -524,7 +524,7 @@ async function callback(name, ...args) {
         case "shim_display_nhwindow":
             id = `menu_${args[0]}`;
             menu = document.getElementById(id);
-            if (/* args[1] &&  */mobile && menu) { // TODO for now block always
+            if (/* args[1] &&  */mobile && menu) { // for now block always
                 openDialog(args[0]);
                 addBaseDialogOptions(args[0]);
                 key = await new Promise(r => { inputResolve = r; });
@@ -878,13 +878,13 @@ async function selectMenu(args) {
     let key;
     let openPage = openPageByWindow[args[0]] || 0;
     let inputNumber;
+    let preSelectionNumberInput = "";
     while (true) {
         inputNumber = null;
         updateOptionsToOpenPage(args[0]);
         openPage = openPageByWindow[args[0]] || 0;
         key = await new Promise(r => { inputResolve = r; });
 
-        // TODO on pc handle as number keys to number before selection
         if (key === 1 || key === -1) {
             if (key === -1) {
                 endMenuKbInput();
@@ -897,6 +897,8 @@ async function selectMenu(args) {
             // in custom number input key is accept/cancel indicator, while selector is here
             key = menuOptionForInput;
             endMenuKbInput();
+        } else if (!mobile && key >= 48 && key <= 57) {
+            preSelectionNumberInput += String.fromCharCode(key);
         } else if (key === 13) {
             break;
         } else if (key === 27) {
@@ -922,6 +924,9 @@ async function selectMenu(args) {
         if (existingIdx !== -1) {
             incSelectionsByMenu[id].splice(existingIdx, 1);
         } else {
+            if (preSelectionNumberInput && !isNaN(preSelectionNumberInput) && Number(preSelectionNumberInput) > 0) {
+                inputNumber = Number(preSelectionNumberInput);
+            }
             incSelectionsByMenu[id].push({ selector: String.fromCharCode(key), page: openPage, number: inputNumber });
         }
         updateSelectionVisuals(args[0], incSelectionsByMenu[id]);
