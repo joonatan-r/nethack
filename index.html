@@ -453,7 +453,6 @@ async function callback(name, ...args) {
             return 0;
         case "shim_create_nhwindow":
             winCount++;
-            console.log(`create window ${winCount}`);
             const w = { id: winCount, type: args[0], selections: {} };
             windows.push(w);
             if (w.type === nethackGlobal.constants.WIN_TYPE.NHW_MENU) {
