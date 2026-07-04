@@ -373,12 +373,15 @@ async function callback(name, ...args) {
             return true;
         // TODO are these needed?
         // display_file, update_inventory, update_positionbar, init_nhwindows, status_init, status_finish,
-        // nhbell, mark_synch, wait_synch, delay_output, askname, cliparound, number_pad, suspend_nhwindows,
+        // nhbell, mark_synch, wait_synch, askname, cliparound, number_pad, suspend_nhwindows,
         // resume_nhwindows, can_suspend, outrip, preference_update, getmsghistory
         // case "shim_status_enablefield":
         //     return 0;
         // case "shim_message_menu":
         //     newMsg(args[0], true);
+        case "shim_delay_output":
+            await new Promise(r => setTimeout(r, 50));
+            return 0;
         case "shim_putstr":
         case "shim_putmixed": // TODO
             id = `menu_${args[0]}`;
