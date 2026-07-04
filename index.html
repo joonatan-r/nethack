@@ -164,6 +164,8 @@ let inputResolve;
 let isCmdInput = false;
 let cmdInput = "";
 let menuOptionForInput = "";
+let openKbPage = -1;
+let prevKbState = -1;
 const rowno = 21;
 const colno = 80;
 let curs;
@@ -1122,8 +1124,13 @@ function addDialogOption(option, page, text, menu, cb, onlyText) {
 }
 
 function enableMenuKbInput(option) {
+    if (!mobileKbOn) {
+        prevKbState = -1;
+    } else {
+        prevKbState = openKbPage;
+    }
     mobileKbOn = true;
-    createKb();
+    createKb(3);
     adjustFixedDivs();
     footer.style.zIndex = 4;
     msg.style.zIndex = 4;
@@ -1133,7 +1140,15 @@ function enableMenuKbInput(option) {
 }
 
 function endMenuKbInput() {
-    // TODO restore kb state to how it was before
+    if (prevKbState === -1) {
+        mobileKbOn = false;
+        createMobileControls();
+    } else {
+        mobileKbOn = true;
+        createKb(prevKbState);
+    }
+    adjustFixedDivs();
+    centerIfMobile();
     cmdInput = "";
     menuOptionForInput = "";
     newMsg("");
@@ -1211,6 +1226,7 @@ function createMobileControls() {
 }
 
 function createKb(idx = 0) {
+    openKbPage = idx;
     const keys = [
         [
             ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
