@@ -50,6 +50,7 @@
             overflow: auto;
             overscroll-behavior: contain;
             font-size: 10px;
+            z-index: 2;
         }
         #footerMsg {
             background-color: black;
@@ -60,6 +61,7 @@
             border: 1px solid lightgray;
             overflow: auto;
             overscroll-behavior: contain;
+            z-index: 2;
         }
         #footer {
             background-color: black;
@@ -72,6 +74,7 @@
             overscroll-behavior: contain;
             display: flex;
             flex-direction: row;
+            z-index: 2;
         }
         #dialog {
             position: absolute;
@@ -85,7 +88,7 @@
             flex-direction: column;
             align-items: center;
             background-color: rgba(0, 0, 0, 0.8);
-            z-index: 2;
+            z-index: 3;
         }
         #padDiv {
             height: 0;
@@ -149,6 +152,7 @@ let synced = false;
 let syncResolve;
 const syncPromise = new Promise(r => { syncResolve = r; });
 let touchTimer;
+let btnTouchTimer;
 let disableClick = false;
 let disableClickTimer;
 const autoQueue = [];
@@ -159,6 +163,7 @@ let storedFS;
 let inputResolve;
 let isCmdInput = false;
 let cmdInput = "";
+let menuOptionForInput = "";
 const rowno = 21;
 const colno = 80;
 let curs;
@@ -783,8 +788,10 @@ function updateSelectionVisuals(windowId, incomingSelections) {
     for (const option of options) {
         let text = escapeHtmlRead(option.innerHTML);
         let newText = "";
-        if (incomingSelections.some(s => s.selector === text.charAt(0) && s.page === openPage)) {
-            newText += text.charAt(0) + " + " + text.substring(4);
+        const selection = incomingSelections.find(s => s.selector === text.charAt(0) && s.page === openPage);
+        if (selection) {
+            const indicator = selection.number ? " # " : " + ";
+            newText += text.charAt(0) + indicator + text.substring(4);
         } else {
             newText += text.charAt(0) + " - " + text.substring(4);
         }
@@ -868,11 +875,27 @@ async function selectMenu(args) {
     let existingIdx = -1;
     let key;
     let openPage = openPageByWindow[args[0]] || 0;
+    let inputNumber;
     while (true) {
+        inputNumber = null;
         updateOptionsToOpenPage(args[0]);
         openPage = openPageByWindow[args[0]] || 0;
         key = await new Promise(r => { inputResolve = r; });
-        if (key === 13) {
+
+        // TODO on pc handle as number keys to number before selection
+        if (key === 1 || key === -1) {
+            if (key === -1) {
+                endMenuKbInput();
+                continue;
+            }
+            let str = key === -1 ? key : cmdInput;
+            if (!isNaN(str) && Number(str) > 0) {
+                inputNumber = Number(str);
+            }
+            // in custom number input key is accept/cancel indicator, while selector is here
+            key = menuOptionForInput;
+            endMenuKbInput();
+        } else if (key === 13) {
             break;
         } else if (key === 27) {
             incSelectionsByMenu[id] = [];
@@ -897,7 +920,7 @@ async function selectMenu(args) {
         if (existingIdx !== -1) {
             incSelectionsByMenu[id].splice(existingIdx, 1);
         } else {
-            incSelectionsByMenu[id].push({ selector: String.fromCharCode(key), page: openPage });
+            incSelectionsByMenu[id].push({ selector: String.fromCharCode(key), page: openPage, number: inputNumber });
         }
         updateSelectionVisuals(args[0], incSelectionsByMenu[id]);
         if (args[1] === nethackGlobal.constants.MENU_SELECT.PICK_ONE) {
@@ -955,7 +978,7 @@ function sendSelections(window, how, selected, incomingSelections) {
         if (!selection) {
             continue;
         }
-        validSelections.push(selection);
+        validSelections.push({ value: selection, number: inc.number || -1 }); // -1 for "all"
     }
     if (!validSelections.length) {
         return 0;
@@ -963,8 +986,8 @@ function sendSelections(window, how, selected, incomingSelections) {
     const ptr = Module._malloc(20 * validSelections.length);
     let i = 0;
     for (const v of validSelections) {
-        Module.setValue(ptr + i, v, 'i64');
-        Module.setValue(ptr + i + 8, -1, 'i32'); // TODO for now always set "-1" meaning "all"
+        Module.setValue(ptr + i, v.value, 'i64');
+        Module.setValue(ptr + i + 8, v.number, 'i32');
         i += 16;
     }
     Module.setValue(selected, ptr, '*');
@@ -975,9 +998,8 @@ function addBaseDialogOptions(windowId) {
     const id = `menu_${windowId}`;
     const menu = document.getElementById(id);
     if (menu) {
-        const page = openPageByWindow[windowId] || 0;
         for (const option of ['Enter', 'Escape']) {
-            addDialogOption(option, page, option, menu);
+            addDialogOption(option, -1, option, menu);
         }
     }
 }
@@ -1018,7 +1040,7 @@ function openYnDialog(text, options) {
     ynElText.innerHTML = text;
     ynEl.appendChild(ynElText);
     for (const option of options) {
-        addDialogOption(option, 0, option, ynEl);
+        addDialogOption(option, -1, option, ynEl);
     }
     adjustFixedDivs();
 }
@@ -1029,14 +1051,14 @@ function openExtDialog() {
     const extEl = document.createElement("div");
     extEl.id = "ext_elem";
     dialog.appendChild(extEl);
-    addDialogOption("Escape", 0, "Escape", extEl, e => {
+    addDialogOption("Escape", -1, "Escape", extEl, e => {
         e.stopPropagation(); // prevent being detected as direction click
         e.stopImmediatePropagation();
         document.getElementById("ext_elem")?.remove();
         closeDialogIfEmpty();
     });
     for (const option of getExtCmds().filter(cmd => !wizModeCmds.includes(cmd) && !cmd.startsWith("wiz"))) {
-        addDialogOption(option, 0, `#${option}`, extEl, e => {
+        addDialogOption(option, -1, `#${option}`, extEl, e => {
             e.stopPropagation();
             e.stopImmediatePropagation();
             if (inputResolve) {
@@ -1068,16 +1090,56 @@ function addDialogOption(option, page, text, menu, cb, onlyText) {
     el.style.margin = "5px";
     el.innerHTML = text;
     if (cb) {
-        el.onclick = cb;
+        el.onclick = e => {
+            if (isCmdInput) {
+                return;
+            }
+            cb(e);
+        };
     } else {
         el.onclick = e => {
+            if (isCmdInput) {
+                return;
+            }
             e.stopPropagation();
             e.stopImmediatePropagation();
             handleKey(option);
         };
+        if (page !== -1) {
+            el.ontouchstart = e => {
+                if (isCmdInput) {
+                    return;
+                }
+                clearTimeout(btnTouchTimer);
+                btnTouchTimer = setTimeout(() => enableMenuKbInput(option), 500);
+            };
+            el.ontouchmove = e => { clearTimeout(btnTouchTimer); };
+            el.ontouchend = e => { clearTimeout(btnTouchTimer); };
+        }
     }
     menu.appendChild(el);
     return el;
+}
+
+function enableMenuKbInput(option) {
+    mobileKbOn = true;
+    createKb();
+    adjustFixedDivs();
+    footer.style.zIndex = 4;
+    msg.style.zIndex = 4;
+    isCmdInput = true;
+    menuOptionForInput = option.charCodeAt(0);
+    newMsg("");
+}
+
+function endMenuKbInput() {
+    // TODO restore kb state to how it was before
+    cmdInput = "";
+    menuOptionForInput = "";
+    newMsg("");
+    isCmdInput = false;
+    footer.style.zIndex = 2;
+    msg.style.zIndex = 2;
 }
 
 function initDialog() {
@@ -1140,7 +1202,7 @@ function createMobileControls() {
                 if (lockCamera) {
                     centerIfMobile();
                 }
-            } else if (char === 'Ext') {
+            } else if (char === 'Ext' && !isCmdInput) {
                 openExtDialog();
             }
         };
