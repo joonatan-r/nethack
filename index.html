@@ -585,9 +585,11 @@ async function callback(name, ...args) {
             // even though auto sync is on, sync for the callback to ensure done
             storedFS.syncfs(false, err => {
                 err && console.warn(err);
-                newMsg("Saved");
                 window.visualViewport.onresize = undefined;
                 window.visualViewport.onscroll = undefined;
+                onbeforeunload = undefined;
+                document.body.innerHTML = "";
+                alert("Saved");
             });
             return 0;
         default:
