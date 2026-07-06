@@ -153,6 +153,7 @@ let syncResolve;
 const syncPromise = new Promise(r => { syncResolve = r; });
 let touchTimer;
 let btnTouchTimer;
+const touchStart = {};
 let disableClick = false;
 let disableClickTimer;
 const autoQueue = [];
@@ -208,6 +209,8 @@ if (mobile) {
             return;
         }
         const coords = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        touchStart.x = coords.x;
+        touchStart.y = coords.y;
         const key = getDirectionKeyChar(coords).toUpperCase();
         clearTimeout(touchTimer);
         touchTimer = setTimeout(() => {
@@ -221,6 +224,35 @@ if (mobile) {
     });
     document.addEventListener("touchmove", e => {
         clearTimeout(touchTimer);
+        if ( e.touches.length > 1) {
+            return;
+        }
+        // allow scrolling map back into view if hidden by centering margin
+        const rect = root.getBoundingClientRect();
+        const touchX = e.touches[0].clientX;
+        const touchY = e.touches[0].clientY;
+        const { offsetTop, offsetLeft, height, width, scale } = window.visualViewport;
+        const padX = (width / 3);
+        const padY = (height / 3);
+        const tolerance = 10;
+        const scrollingPastStartX = touchX > touchStart.x && rect.x < padX && offsetLeft <= tolerance;
+        const scrollingPastEndX = touchX < touchStart.x && rect.x + rect.width > (window.innerWidth - padX)
+            && (offsetLeft + width) >= window.innerWidth - tolerance;
+        const scrollingPastStartY = touchY > touchStart.y && rect.y < padY && offsetTop <= tolerance;
+        const scrollingPastEndY = touchY < touchStart.y && rect.y + rect.height > (window.innerHeight - padY)
+            && (offsetTop + height) >= window.innerHeight - tolerance;
+        if (scrollingPastStartX || scrollingPastEndX) {
+            const prevMarginLeft = Number(root.style.marginLeft?.slice(0, -2));
+            const adjustAmount = touchX - touchStart.x;
+            root.style.marginLeft = `${prevMarginLeft + adjustAmount}px`;
+        }
+        if (scrollingPastStartY || scrollingPastEndY) {
+            const prevMarginTop = Number(root.style.marginTop?.slice(0, -2));
+            const adjustAmount = touchY - touchStart.y;
+            root.style.marginTop = `${prevMarginTop + adjustAmount}px`;
+        }
+        touchStart.x = touchX;
+        touchStart.y = touchY;
     });
     document.addEventListener("touchend", e => {
         clearTimeout(touchTimer);
@@ -1194,7 +1226,7 @@ function closeDialogIfEmpty() {
 }
 
 function createMobileControls() {
-    const chars = ['Kb', 'Ext', 'CmrLck', 'CmrRst'];
+    const chars = ['Kb', 'Ext', 'CmrLck'];
     footer.innerHTML = "";
     footer.style.flexDirection = "row";
     for (const char of chars) {
@@ -1217,9 +1249,6 @@ function createMobileControls() {
                 createKb();
                 adjustFixedDivs();
                 centerIfMobile();
-            } else if (char === 'CmrRst') {
-                root.style.marginLeft = 0;
-                root.style.marginTop = 0;
             } else if (char === 'CmrLck') {
                 lockCamera = !lockCamera;
                 el.style.backgroundColor = lockCamera ? "#555" : "black";

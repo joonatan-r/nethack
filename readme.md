@@ -15,7 +15,6 @@ Mobile-specific features:
     - Dialogs can be minimized and brought back using a floating button
 - Menu dialog for extended commands (can also just be written or use the shortcuts)
 - Camera lock "CmrLck" switch for keeping character centered also when zooming
-- Camera reset "CmrRst" button, sometimes needed to be able to pan the whole map due to how the interface is implemented
 - Saving and returning to game (Warning: closing without saving deletes the run)
 
 ### Playing on desktop
