@@ -143,7 +143,6 @@ let ctrl = false;
 let meta = false;
 let dialogOn = false;
 let floatBtnOn = false;
-let lockCamera = false;
 let footerHeight = 0;
 let winCount = 0;
 let init = true;
@@ -1226,7 +1225,7 @@ function closeDialogIfEmpty() {
 }
 
 function createMobileControls() {
-    const chars = ['Kb', 'Ext', 'CmrLck'];
+    const chars = ['Kb', 'Ext'];
     footer.innerHTML = "";
     footer.style.flexDirection = "row";
     for (const char of chars) {
@@ -1249,12 +1248,6 @@ function createMobileControls() {
                 createKb();
                 adjustFixedDivs();
                 centerIfMobile();
-            } else if (char === 'CmrLck') {
-                lockCamera = !lockCamera;
-                el.style.backgroundColor = lockCamera ? "#555" : "black";
-                if (lockCamera) {
-                    centerIfMobile();
-                }
             } else if (char === 'Ext' && !isCmdInput) {
                 openExtDialog();
             }
@@ -1436,9 +1429,6 @@ function adjustFixedDivs() {
     padDiv.style.width = `10px`;
     padDiv2.style.height = `${rootHeight}px`;
     padDiv2.style.width = `10px`;
-    if (lockCamera) {
-        centerIfMobile();
-    }
 }
 
 function getVisualCenter() {
