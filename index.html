@@ -203,7 +203,7 @@ if (mobile) {
     adjustFixedDivs();
     document.addEventListener("touchstart", e => {
         if ([header, footerMsg, footer, dialog].some(el => el.contains(e.target))
-            || e.touches?.length > 1 || floatBtnOn 
+            || e.touches.length > 1 || floatBtnOn 
         ) {
             return;
         }
@@ -223,7 +223,9 @@ if (mobile) {
     });
     document.addEventListener("touchmove", e => {
         clearTimeout(touchTimer);
-        if ( e.touches.length > 1) {
+        if ([header, footerMsg, footer, dialog].some(el => el.contains(e.target))
+            || e.touches.length > 1
+        ) {
             return;
         }
         // allow scrolling map back into view if hidden by centering margin
