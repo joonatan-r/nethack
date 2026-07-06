@@ -156,8 +156,10 @@ const touchStart = {};
 let disableClick = false;
 let disableClickTimer;
 const autoQueue = [];
+const autoCodeQueue = [];
 const autoLookMsgs = [];
 let autoLookAction = false;
+let lastHandledKeyCodes = [];
 const Module = {};
 let storedFS;
 let inputResolve;
@@ -268,8 +270,10 @@ if (mobile) {
             if (curs === closestAnd2ndClosest.closest || curs === closestAnd2ndClosest.secondClosest) {
                 autoLookAction = true;
                 inputResolve(":".charCodeAt(0));
+                updateLastHandled(":".charCodeAt(0));
             } else {
                 inputResolve(key.charCodeAt(0));
+                updateLastHandled(key.charCodeAt(0));
             }
         }
     });
@@ -399,6 +403,8 @@ async function callback(name, ...args) {
         } else if (name === "shim_select_menu") {
             return 0;
         }
+    } else if (autoCodeQueue.length && (name === "shim_nhgetch" || name === "shim_nh_poskey")) {
+        return autoCodeQueue.shift();
     }
 
     switch(name) {
@@ -1227,7 +1233,7 @@ function closeDialogIfEmpty() {
 }
 
 function createMobileControls() {
-    const chars = ['Kb', 'Ext'];
+    const chars = ['Kb', 'Ext', 'Redo'];
     footer.innerHTML = "";
     footer.style.flexDirection = "row";
     for (const char of chars) {
@@ -1252,6 +1258,18 @@ function createMobileControls() {
                 centerIfMobile();
             } else if (char === 'Ext' && !isCmdInput) {
                 openExtDialog();
+            } else if (char === 'Redo' && !isCmdInput) {
+                if (inputResolve) {
+                    const codes = [...lastHandledKeyCodes];
+                    codes.pop(); // remove the non-number input at the end
+                    if (codes.length) {
+                        inputResolve(codes.shift());
+                        autoQueue.push(...(codes.map(c => String.fromCharCode(c))));
+                        autoCodeQueue.push(1); // Ctrl + A
+                    } else {
+                        inputResolve(1); // Ctrl + A
+                    }
+                }
             }
         };
         footer.appendChild(el);
@@ -1483,6 +1501,7 @@ function handleKey(inputKey, ctrlKey, metaKey, numPad) {
                 code = 0x80 | code;
             }
             inputResolve(code);
+            updateLastHandled(code);
         } else {
             let key = {
                 Escape: 27,
@@ -1496,12 +1515,29 @@ function handleKey(inputKey, ctrlKey, metaKey, numPad) {
                 ArrowUp: 'K'.charCodeAt(0),
                 PageUp: 'U'.charCodeAt(0)
             }[inputKey];
-            key && inputResolve(key);
+            if (key) {
+                inputResolve(key);
+                updateLastHandled(key);
+            }
             if (inputKey === 'Escape') {
                 prevMsgsOffset = 1;
             }
         }
     }
+}
+
+function updateLastHandled(code) {
+    let lastCodeIsNotNumber = false;
+    if (lastHandledKeyCodes.length) {
+        const last = lastHandledKeyCodes[lastHandledKeyCodes.length - 1];
+        lastCodeIsNotNumber = last < 48 || last > 57;
+    }
+    console.warn(lastCodeIsNotNumber)
+    if (lastCodeIsNotNumber) {
+        lastHandledKeyCodes = [];
+    }
+    lastHandledKeyCodes.push(code);
+    console.warn(lastHandledKeyCodes.map(c => String.fromCharCode(c)))
 }
 
 function autoTravelIfPan(e) {
