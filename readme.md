@@ -12,6 +12,7 @@ Mobile-specific features:
 - Custom soft keyboard (including Ctrl, Shift, Meta, Enter, Escape, Delete (actually corresponds to backspace))
 - Mobile-style dialogs
     - Custom number of items can be selected by pressing and holding the item row
+    - All items in a group can be selected by tapping the title
     - Dialogs can be minimized and brought back using a floating button
 - Menu dialog for extended commands (can also just be written or use the shortcuts)
 - Quick access redo button that also remembers the number of actions

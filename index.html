@@ -175,6 +175,7 @@ let cursColor = "darkgreen";
 const colorsByCoords = {};
 const bgColorsByCoords = {};
 const selectorsByMenu = {};
+const groupSelectorsByMenu = {};
 const incSelectionsByMenu = {};
 const openPageByWindow = {};
 const statusMap = {};
@@ -739,6 +740,7 @@ function destroyMenu(windowId) {
     const menu = document.getElementById(id);
     if (menu) {
         delete selectorsByMenu[id];
+        delete groupSelectorsByMenu[id];
         delete incSelectionsByMenu[id];
         delete openPageByWindow[windowId];
         menu.remove();
@@ -765,6 +767,7 @@ function addMenuLine(args) {
     let selector = "";
     const prevPage = (selectorsByMenu[id] || [])[0]?.page || 0;
     let page = prevPage;
+    let group = args[4] ? args[4] : undefined;
     if (args[3]) {
         selector = args[3] ? String.fromCharCode(args[3]) : "";
     } else if (args[2]) { // selectable but need to handle selector options manually
@@ -784,14 +787,31 @@ function addMenuLine(args) {
         incSelectionsByMenu[id].push({ selector, page });
     }
     if (selector !== "") {
-        windows.find(w => w.id === args[0]).selections[`${selector}_${page}`] = args[2];
+        windows.find(w => w.id === args[0]).selections[`${selector}_${page}`] = { id: args[2], group };
     }
     const text = selector + separator + escapeHtmlWrite(args[7]);
     if (mobile) {
+        if (!groupSelectorsByMenu[id]) {
+            groupSelectorsByMenu[id] = [];
+        }
+        // lines with no selector are titles, clicking them should trigger the group selector of all
+        // the later lines before another text (Note: just assumes it will be the same for them all)
+        const groupSelectorIdx = groupSelectorsByMenu[id].length;
         if (selector) {
             addDialogOption(selector, page, text, menu);
+            if (group && groupSelectorsByMenu[id][groupSelectorIdx - 1] !== group) {
+                groupSelectorsByMenu[id].push(group);
+            }
         } else {
-            addDialogOption(selector, page, text, menu, () => null, true);
+            addDialogOption(selector, page, text, menu, e => {
+                const groupCode = groupSelectorsByMenu[id][groupSelectorIdx];
+                if (isCmdInput || !groupCode) {
+                    return;
+                }
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                handleKey(String.fromCharCode(groupCode));
+            }, true);
         }
     } else {
         if (selector) {
@@ -802,9 +822,8 @@ function addMenuLine(args) {
     }
 }
 
-function updateSelectionVisuals(windowId, incomingSelections) {
+function updateSelectionVisuals(windowId, page, incomingSelections) {
     const id = `menu_${windowId}`;
-    const openPage = openPageByWindow[windowId] || 0;
     let options;
     if (mobile) {
         const menu = document.getElementById(id);
@@ -815,7 +834,7 @@ function updateSelectionVisuals(windowId, incomingSelections) {
         options = Array.from(menu.children)
             .filter(el => !el.className.includes("_text")
                 && !el.id.endsWith("_text")
-                && el.className.includes(`page_${openPage}`)
+                && el.className.includes(`page_${page}`)
                 && el.innerHTML !== 'Enter'
                 && el.innerHTML !== 'Escape'
             );
@@ -827,13 +846,13 @@ function updateSelectionVisuals(windowId, incomingSelections) {
         }
         options = Array.from(menuText.children)
             .filter(el => !el.className.includes("_text")
-                && el.className.includes(`page_${openPage}`)
+                && el.className.includes(`page_${page}`)
             );
     }
     for (const option of options) {
         let text = escapeHtmlRead(option.innerHTML);
         let newText = "";
-        const selection = incomingSelections.find(s => s.selector === text.charAt(0) && s.page === openPage);
+        const selection = incomingSelections.find(s => s.selector === text.charAt(0) && s.page === page);
         if (selection) {
             const indicator = selection.number ? " # " : " + ";
             newText += text.charAt(0) + indicator + text.substring(4);
@@ -963,16 +982,9 @@ async function selectMenu(args) {
             }
             continue;
         }
-        existingIdx = incSelectionsByMenu[id].findIndex(s => s.selector.charCodeAt(0) === key && s.page === openPage);
-        if (existingIdx !== -1) {
-            incSelectionsByMenu[id].splice(existingIdx, 1);
-        } else {
-            if (preSelectionNumberInput && !isNaN(preSelectionNumberInput) && Number(preSelectionNumberInput) > 0) {
-                inputNumber = Number(preSelectionNumberInput);
-            }
-            incSelectionsByMenu[id].push({ selector: String.fromCharCode(key), page: openPage, number: inputNumber });
+        if (!updateAllIfKeyIsGroup(args[0], id, key, inputNumber, preSelectionNumberInput)) {
+            updateIncSelections(args[0], id, key, openPage, inputNumber, preSelectionNumberInput);
         }
-        updateSelectionVisuals(args[0], incSelectionsByMenu[id]);
         if (args[1] === nethackGlobal.constants.MENU_SELECT.PICK_ONE) {
             break;
         }
@@ -984,6 +996,38 @@ async function selectMenu(args) {
     const incomingSelections = incSelectionsByMenu[id];
     incSelectionsByMenu[id] = [];
     return incomingSelections;
+}
+
+function updateAllIfKeyIsGroup(windowId, menuId, key, inputNumber, preSelectionNumberInput) {
+    const selectorsAndPagesForGroup = [];
+    for (const [k, val] of Object.entries(windows.find(w => w.id === windowId).selections)) {
+        if (val.group !== key) {
+            continue;
+        }
+        const [selector, page] = k.split("_");
+        selectorsAndPagesForGroup.push({ selector, page });
+    }
+    selectorsAndPagesForGroup.forEach(spfg => {
+        const selectorKeyCode = spfg.selector.charCodeAt(0);
+        const page = Number(spfg.page); // update in all pages
+        updateIncSelections(windowId, menuId, selectorKeyCode, page, inputNumber, preSelectionNumberInput);
+    });
+    return !!selectorsAndPagesForGroup.length;
+}
+
+// NOTE: currently this adds to list even if not a valid selection
+function updateIncSelections(windowId, menuId, key, openPage, inputNumber, preSelectionNumberInput) {
+    let existingIdx = incSelectionsByMenu[menuId].findIndex(s => s.selector.charCodeAt(0) === key && s.page === openPage);
+    let num = inputNumber;
+    if (existingIdx !== -1) {
+        incSelectionsByMenu[menuId].splice(existingIdx, 1);
+    } else {
+        if (preSelectionNumberInput && !isNaN(preSelectionNumberInput) && Number(preSelectionNumberInput) > 0) {
+            num = Number(preSelectionNumberInput);
+        }
+        incSelectionsByMenu[menuId].push({ selector: String.fromCharCode(key), page: openPage, number: num });
+    }
+    updateSelectionVisuals(windowId, openPage, incSelectionsByMenu[menuId]);
 }
 
 // typedef union any {
@@ -1024,7 +1068,7 @@ function sendSelections(window, how, selected, incomingSelections) {
     destroyMenu(window);
     const validSelections = [];
     for (const inc of incomingSelections) {
-        const selection = windows.find(w => w.id === window).selections[`${inc.selector}_${inc.page}`];
+        const selection = windows.find(w => w.id === window).selections[`${inc.selector}_${inc.page}`]?.id;
         if (!selection) {
             continue;
         }
@@ -1532,12 +1576,10 @@ function updateLastHandled(code) {
         const last = lastHandledKeyCodes[lastHandledKeyCodes.length - 1];
         lastCodeIsNotNumber = last < 48 || last > 57;
     }
-    console.warn(lastCodeIsNotNumber)
     if (lastCodeIsNotNumber) {
         lastHandledKeyCodes = [];
     }
     lastHandledKeyCodes.push(code);
-    console.warn(lastHandledKeyCodes.map(c => String.fromCharCode(c)))
 }
 
 function autoTravelIfPan(e) {
