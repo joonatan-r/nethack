@@ -55,6 +55,7 @@
         #footerMsg {
             background-color: black;
             font-size: 16px;
+            white-space: pre-wrap;
             position: absolute;
             margin: 0;
             padding: 0;
@@ -159,6 +160,7 @@ const autoQueue = [];
 const autoCodeQueue = [];
 const autoLookMsgs = [];
 let autoLookAction = false;
+let autoTravelTarget;
 let lastHandledKeyCodes = [];
 const Module = {};
 let storedFS;
@@ -406,6 +408,28 @@ async function callback(name, ...args) {
         }
     } else if (autoCodeQueue.length && (name === "shim_nhgetch" || name === "shim_nh_poskey")) {
         return autoCodeQueue.shift();
+    }
+
+    if (autoTravelTarget && name === "shim_select_menu") {
+        return 0;
+    }
+
+    // after we have set target from long press and executed "_" to get into look mode, we need to
+    // check where curs is now to calculate actions (it can be different than player if previous
+    // travel was interrupted)
+    if (autoTravelTarget && !autoQueue.length && name === "shim_curs") {
+        const newCurs = document.getElementById(`${args[1]}_${args[2]}`);
+        const cursCoords = getCoordsFromElement(newCurs);
+        const horizKey = autoTravelTarget.x > cursCoords.x ? 'l' : 'h';
+        const vertKey = autoTravelTarget.y > cursCoords.y ? 'j' : 'k';
+        for (let i = 0; i < Math.abs(autoTravelTarget.x - cursCoords.x); i++) {
+            autoQueue.push(horizKey);
+        }
+        for (let i = 0; i < Math.abs(autoTravelTarget.y - cursCoords.y); i++) {
+            autoQueue.push(vertKey);
+        }
+        autoQueue.push(".");
+        autoTravelTarget = undefined;
     }
 
     switch(name) {
@@ -660,7 +684,11 @@ function newMsg(text, add) {
         prevMsgs.push(msg.innerHTML);
     }
     if (add) {
-        msg.innerHTML += "\n" + text;
+        if (mobile && msg.innerHTML === "") {
+            msg.innerHTML += text;
+        } else {
+            msg.innerHTML += "\n" + text;
+        }
     } else {
         msg.innerHTML = text;
     }
@@ -1589,7 +1617,6 @@ function autoTravelIfPan(e) {
     const rect = curs.getBoundingClientRect();
     const cursX = rect.x + (rect.width / 2);
     const cursY = rect.y + (rect.height / 2);
-    const key = getDirectionKeyChar(e);
     const tolerance = 10;
     const center = getVisualCenter();
     const closestAnd2ndClosest = getClosestAnd2ndClosestCell(e);
@@ -1597,15 +1624,7 @@ function autoTravelIfPan(e) {
         autoQueue.splice(0, autoQueue.length);
         const coords = getCoordsFromElement(closestAnd2ndClosest.closest);
         const cursCoords = getCoordsFromElement(curs);
-        const horizKey = coords.x > cursCoords.x ? 'l' : 'h';
-        const vertKey = coords.y > cursCoords.y ? 'j' : 'k';
-        for (let i = 0; i < Math.abs(coords.x - cursCoords.x); i++) {
-            autoQueue.push(horizKey);
-        }
-        for (let i = 0; i < Math.abs(coords.y - cursCoords.y); i++) {
-            autoQueue.push(vertKey);
-        }
-        autoQueue.push(".");
+        autoTravelTarget = coords;
         inputResolve("_".charCodeAt(0));
         return true;
     }
