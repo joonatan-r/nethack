@@ -579,8 +579,7 @@ async function callback(name, ...args) {
             return cmdIdx;
         case "shim_getlin":
             isCmdInput = true;
-            newMsg("");
-            newMsg(args[0]);
+            newMsg(args[0], true);
             key = await new Promise(r => { inputResolve = r; });
             let str = key === -1 ? key : cmdInput;
             inputResolve = undefined;
