@@ -568,6 +568,7 @@ async function callback(name, ...args) {
             return 0;
         case "shim_get_ext_cmd":
             isCmdInput = true;
+            newMsg("");
             newMsg("#");
             key = await new Promise(r => { inputResolve = r; });
             cmdIdx = key === -1 ? key : getExtCmdIdx(cmdInput);
@@ -578,6 +579,7 @@ async function callback(name, ...args) {
             return cmdIdx;
         case "shim_getlin":
             isCmdInput = true;
+            newMsg("");
             newMsg(args[0]);
             key = await new Promise(r => { inputResolve = r; });
             let str = key === -1 ? key : cmdInput;
