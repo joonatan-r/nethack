@@ -392,9 +392,9 @@ async function callback(name, ...args) {
             let container = false;
             let items = false;
             for (const m of autoLookMsgs) {
-                if (m.includes("staircase up")) {
+                if (m.includes("staircase up") || m.includes("ladder up")) {
                     stairUp = true;
-                } else if (m.includes("staircase down")) {
+                } else if (m.includes("staircase down") || m.includes("ladder down")) {
                     stairDown = true;
                 } else if (["sack", "bag", "box", "chest"].some(i => m.includes(i))) {
                     container = true;
