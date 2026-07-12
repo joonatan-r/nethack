@@ -138,10 +138,11 @@
 import factory from "./wasm/nethack.js";
 
 let user;
+let nethackOptions;
 let mobile = true;
 let wizard = false;
 
-const flags = document.location.hash.replaceAll("#", ",").split(",");
+const flags = document.location.hash.replaceAll("#", ";").split(";");
 
 for (const flag of flags) {
     if (flag) {
@@ -151,6 +152,8 @@ for (const flag of flags) {
             wizard = true;
         } else if (flag.startsWith("user=")) {
             user = flag.substring(5);
+        } else if (flag.startsWith("OPTIONS=")) {
+            nethackOptions = flag;
         }
     }
 }
@@ -341,6 +344,9 @@ function nethackStart(cb) {
         const {FS, IDBFS, ENV} = obj;
         FS.mkdir('/save');
         FS.mount(IDBFS, {autoPersist: true}, '/save');
+        if (nethackOptions) {
+            FS.writeFile('/home/web_user/.nethackrc', nethackOptions);
+        }
         FS.syncfs(true, err => {
             err && console.warn(err);
             synced = true;
@@ -367,7 +373,7 @@ function nethackStart(cb) {
 }
 
 async function callback(name, ...args) {
-    console.log(`---- ${name}: ${Array.from(args).join(", ")}`);
+    console.log(`${name}: ${Array.from(args).join(", ")}`);
 
     if (init) {
         init = false;
