@@ -17,6 +17,7 @@ Mobile-specific features:
 - Menu dialog for extended commands (can also just be written or use the shortcuts)
 - Quick access redo button that also remembers the number of actions
 - Saving and returning to game (Warning: closing without saving deletes the run)
+- Button for saving custom nethack configuration options
 
 ### Playing on desktop
 

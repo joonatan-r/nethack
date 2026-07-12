@@ -141,9 +141,7 @@ let user;
 let nethackOptions;
 let mobile = true;
 let wizard = false;
-
 const flags = document.location.hash.replaceAll("#", ";").split(";");
-
 for (const flag of flags) {
     if (flag) {
         if (flag === "pc") {
@@ -156,6 +154,10 @@ for (const flag of flags) {
             nethackOptions = flag;
         }
     }
+}
+const storedNethackOpts = localStorage.getItem("nethackOptions");
+if (storedNethackOpts && !nethackOptions) {
+    nethackOptions = storedNethackOpts;
 }
 
 let mobileKbOn = false;
@@ -1335,7 +1337,7 @@ function closeDialogIfEmpty() {
 }
 
 function createMobileControls() {
-    const chars = ['Kb', 'Ext', 'Redo'];
+    const chars = ['Kb', 'Ext', 'Redo', 'OPTS'];
     footer.innerHTML = "";
     footer.style.flexDirection = "row";
     for (const char of chars) {
@@ -1371,6 +1373,11 @@ function createMobileControls() {
                     } else {
                         inputResolve(1); // Ctrl + A
                     }
+                }
+            } else if (char === 'OPTS') {
+                const newOpts = prompt('Give new nethack configuration options to be saved (as "OPTIONS=...")');
+                if (newOpts) {
+                    localStorage.setItem('nethackOptions', newOpts);
                 }
             }
         };
