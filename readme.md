@@ -21,3 +21,7 @@ Mobile-specific features:
 ### Playing on desktop
 
 The game's desktop interface is available on https://joonatan-r.github.io/nethack/#pc. This is less refined compared to the mobile interface, but should function similarly to traditional Nethack. Some shortcuts are a bit funky due to also being actions on the browser.
+
+### Additional options
+
+Some additional options are also supported using the text after the url hash ("#"). The previously mentioned "pc" is one of the options, but a comma-separated list can be given that also recognizes "user=<user name>" for custom player name and "wizard" for playing in wizard mode. So, for example, to play on the mobile interface as player "John" you can specify https://joonatan-r.github.io/nethack/#user=John and for the desktop interface https://joonatan-r.github.io/nethack/#pc,user=John. Giving different names can be used to play multiple games at the same time. 

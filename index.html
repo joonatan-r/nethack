@@ -137,7 +137,24 @@
 
 import factory from "./wasm/nethack.js";
 
-let mobile = !document.location.href.endsWith("#pc");
+let user;
+let mobile = true;
+let wizard = false;
+
+const flags = document.location.hash.replaceAll("#", ",").split(",");
+
+for (const flag of flags) {
+    if (flag) {
+        if (flag === "pc") {
+            mobile = false;
+        } else if (flag === "wizard") {
+            wizard = true;
+        } else if (flag.startsWith("user=")) {
+            user = flag.substring(5);
+        }
+    }
+}
+
 let mobileKbOn = false;
 let shift = false;
 let ctrl = false;
@@ -321,7 +338,7 @@ nethackStart(callback);
 function nethackStart(cb) {
     globalThis[cb.name] = cb;
     Module.preRun = function(obj) {
-        const {FS, IDBFS} = obj;
+        const {FS, IDBFS, ENV} = obj;
         FS.mkdir('/save');
         FS.mount(IDBFS, {autoPersist: true}, '/save');
         FS.syncfs(true, err => {
@@ -330,7 +347,13 @@ function nethackStart(cb) {
             syncResolve();
         });
         storedFS = FS;
+        if (user) {
+            ENV['USER'] = user;
+        }
     };
+    if (wizard) {
+        Module['arguments'] = ['-D'];
+    }
     Module.onRuntimeInitialized = function() {
         Module.ccall(
             "shim_graphics_set_callback",
