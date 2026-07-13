@@ -511,8 +511,11 @@ async function callback(name, ...args) {
             newMsg(args[0], true);
             return 0;
         case "shim_status_update":
-            updateStatus(args);
-            historyData += '\n' + JSON.stringify({ name, args: [{ statusMap, condsMap }] });
+            const { statusMapUpdate, condsMapUpdate } = updateStatus(args);
+            if (Object.keys(statusMapUpdate).length !== 0 || Object.keys(condsMapUpdate).length !== 0) {
+                historyData +=
+                    '\n' + JSON.stringify({ name, args: [{ statusMap: statusMapUpdate, condsMap: condsMapUpdate }] });
+            }
             return 0;
         case "shim_print_glyph":
             const x = args[1];
@@ -745,6 +748,8 @@ function newMsg(text, add) {
 function updateStatus(args) {
     prevMsgsOffset = 1; // workaround to reset prev message scrolling when a turn passes
     status.innerHTML = "";
+    let statusMapUpdate = {};
+    let condsMapUpdate = {};
     if (args[0] === nethackGlobal.constants.STATUS_FIELD.BL_CONDITION) {
         const conds = {};
         const mask = Module.getValue(args[1], 'i32');
@@ -757,6 +762,7 @@ function updateStatus(args) {
             condFormatted = condFormatted.charAt(0).toUpperCase() + condFormatted.substring(1);
             conds[condFormatted] = Math.pow(2, val) & mask;
         }
+        condsMapUpdate = getMapUpdate(condsMap, conds);
         condsMap = conds;
     } else if (args[0] !== nethackGlobal.constants.STATUS_FIELD.BL_RESET
         && args[0] !== nethackGlobal.constants.STATUS_FIELD.BL_FLUSH
@@ -768,6 +774,7 @@ function updateStatus(args) {
                 if (args[0] === nethackGlobal.constants.STATUS_FIELD.BL_GOLD) {
                     statusMap[fieldFormatted] = statusMap[fieldFormatted].split(":")[1]
                 }
+                statusMapUpdate[fieldFormatted] = statusMap[fieldFormatted];
                 break;
             }
         }
@@ -795,6 +802,17 @@ function updateStatus(args) {
             curs.style.backgroundColor = cursColor;
         }
     }
+    return { statusMapUpdate, condsMapUpdate };
+}
+
+function getMapUpdate(old, incoming) {
+    const update = {};
+    for (const field of Object.keys(incoming)) {
+        if (incoming[field] !== old[field]) {
+            update[field] = incoming[field];
+        }
+    }
+    return update;
 }
 
 function getOrCreateMenu(id) {
