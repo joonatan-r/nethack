@@ -160,6 +160,7 @@ if (storedNethackOpts && !nethackOptions) {
     nethackOptions = storedNethackOpts;
 }
 
+let playbackOff = localStorage.getItem("nethackPlaybackOff");
 let mobileKbOn = false;
 let shift = false;
 let ctrl = false;
@@ -693,7 +694,9 @@ async function callback(name, ...args) {
             clearMap();
             newMsg(args[0], true);
             // even though auto sync is on, sync for the callback to ensure done
-            await storeHistory();
+            if (!playbackOff) {
+                await storeHistory();
+            }
             storedFS.syncfs(false, err => {
                 err && console.warn(err);
                 window.visualViewport.onresize = undefined;
@@ -1350,11 +1353,12 @@ function closeDialogIfEmpty() {
 }
 
 function createMobileControls() {
-    const chars = ['Kb', 'Ext', 'Redo', 'OPTS', 'DL'];
+    const chars = ['Kb', 'Ext', 'Redo', 'OPTS', 'DL', 'PbOff'];
     footer.innerHTML = "";
     footer.style.flexDirection = "row";
     for (const char of chars) {
         const el = document.createElement("div");
+        el.id = "mobileControl-" + char;
         el.style.display = "flex";
         el.style.flexDirection = "column";
         el.style.justifyContent = "center";
@@ -1364,7 +1368,7 @@ function createMobileControls() {
         el.style.aspectRatio = "1 / 1";
         el.style.border = "1px solid lightgray";
         el.style.backgroundColor = "black";
-        el.innerHTML = char;
+        el.innerHTML = (char === 'PbOff' && playbackOff) ? 'PbOn' : char;
         el.onclick = e => {
             e.stopPropagation();
             e.stopImmediatePropagation();
@@ -1394,6 +1398,10 @@ function createMobileControls() {
                 }
             } else if (char === 'DL') {
                 download();
+            } else if (char === 'PbOff') {
+                localStorage.setItem('nethackPlaybackOff', playbackOff ? '' : 'true');
+                playbackOff = !playbackOff;
+                document.getElementById('mobileControl-PbOff').innerHTML = playbackOff ? 'PbOn' : 'PbOff';
             }
         };
         footer.appendChild(el);
@@ -2187,17 +2195,44 @@ async function getHistory() {
     return historyData.sort((a, b) => a.id - b.id).reduce((prev, current) => prev + current.data, "");
 }
 
+let downloadParts;
+let dlPart;
+
 async function download() {
-    const text = isNewGame ? historyData : await getHistory() + historyData;
-    const name = "nethack-playback.ndjson";
+    if (!downloadParts) {
+        const text = isNewGame ? historyData : await getHistory() + historyData;
+        downloadParts = chunkStr(text, 5000000);
+        dlPart = 0;
+        document.getElementById('mobileControl-DL').innerHTML = `DL (${downloadParts.length})`;
+        return;
+    }
+    const chunk = downloadParts.shift();
+    if (!downloadParts.length) {
+        document.getElementById('mobileControl-DL').innerHTML = 'DL';
+        downloadParts = undefined;
+        dlPart = 'final';
+    } else {
+        document.getElementById('mobileControl-DL').innerHTML = `DL (${downloadParts.length})`;
+        dlPart++;
+    }
+    const name = `nethack-playback-${dlPart}.ndjson`;
     const a = document.createElement("a");
-    const file = new Blob([text], {type: "text/plain"});
+    const file = new Blob([chunk], {type: 'text/plain'});
     a.href = URL.createObjectURL(file);
     a.download = name;
     a.style.display = 'none';
     footer.appendChild(a);
     a.click();
     footer.removeChild(a);
+}
+
+function chunkStr(str, size) {
+    const chunks = [];
+    while (str.length > 0) {
+        chunks.push(str.substring(0, size));
+        str = str.substring(size, str.length);
+    }
+    return chunks;
 }
 
   </script>

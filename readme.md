@@ -20,6 +20,7 @@ Mobile-specific features:
 - Quick access redo button that also remembers the number of actions
 - Button for saving custom nethack configuration options
 - Button for downloading a playback of the current game (all sessions) (experimental, https://joonatan-r.github.io/nethack-player used for viewing)
+    - Can be turned off by clicking the "PbOff" button, and back on by clicking the "PbOn" (only checked on save)
 
 ### Playing on desktop
 
