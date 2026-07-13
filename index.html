@@ -207,6 +207,8 @@ let condsMap = {};
 const prevMsgs = [];
 let prevMsgsOffset = 1;
 let skipMsgSaves = false;
+let historyData = '';
+let isNewGame = true;
 let msg = document.getElementById("msg");
 const root = document.getElementById("root");
 let menus = document.getElementById("menus");
@@ -377,6 +379,10 @@ function nethackStart(cb) {
 async function callback(name, ...args) {
     console.log(`${name}: ${Array.from(args).join(", ")}`);
 
+    if (name !== "shim_print_glyph" && name !== "shim_status_update") {
+        historyData += '\n' + JSON.stringify({ name, args });
+    }
+
     if (init) {
         init = false;
         await syncPromise;
@@ -496,11 +502,16 @@ async function callback(name, ...args) {
             }
             return 0;
         case "shim_raw_print":
+            if (isNewGame && args[0].includes("Restoring save file")) {
+                isNewGame = false;
+            }
+            // fall through
         case "shim_raw_print_bold":
             newMsg(args[0], true);
             return 0;
         case "shim_status_update":
             updateStatus(args);
+            historyData += '\n' + JSON.stringify({ name, args: [{ statusMap, condsMap }] });
             return 0;
         case "shim_print_glyph":
             const x = args[1];
@@ -538,6 +549,7 @@ async function callback(name, ...args) {
             document.getElementById(`${x}_${y}`).style.backgroundColor = bgColor;
             colorsByCoords[`${x}_${y}`] = color;
             bgColorsByCoords[`${x}_${y}`] = bgColor;
+            historyData += '\n' + JSON.stringify({ name, args: [args[0], args[1], args[2], { c, color, bgColor }] });
             return 0;
         case "shim_curs":
             if (curs) {
@@ -681,6 +693,7 @@ async function callback(name, ...args) {
             clearMap();
             newMsg(args[0], true);
             // even though auto sync is on, sync for the callback to ensure done
+            await storeHistory();
             storedFS.syncfs(false, err => {
                 err && console.warn(err);
                 window.visualViewport.onresize = undefined;
@@ -1337,7 +1350,7 @@ function closeDialogIfEmpty() {
 }
 
 function createMobileControls() {
-    const chars = ['Kb', 'Ext', 'Redo', 'OPTS'];
+    const chars = ['Kb', 'Ext', 'Redo', 'OPTS', 'DL'];
     footer.innerHTML = "";
     footer.style.flexDirection = "row";
     for (const char of chars) {
@@ -1379,6 +1392,8 @@ function createMobileControls() {
                 if (newOpts) {
                     localStorage.setItem('nethackOptions', newOpts);
                 }
+            } else if (char === 'DL') {
+                download();
             }
         };
         footer.appendChild(el);
@@ -2089,6 +2104,101 @@ const cp437toUnicode = {
     254: '■',
     255: ' ',
 };
+
+async function storeHistory() {
+    const storeUser = user || "web_user";
+    let db;
+    let dbResolve;
+    let dbPromise = new Promise(r => { dbResolve = r; });
+    let request = window.indexedDB.open("nethackPlayback", 1);
+    request.onerror = e => console.error(e);
+    request.onupgradeneeded = e => {
+        db = e.target.result;
+        db.createObjectStore("nethackPlayback", { keyPath: "id" });
+    }
+    request.onsuccess = e => {
+        db = e.target.result;
+        dbResolve();
+    }
+    await dbPromise;
+    const store = db.transaction(["nethackPlayback"], "readwrite").objectStore("nethackPlayback");
+    if (isNewGame) {
+        dbPromise = new Promise(r => { dbResolve = r; });
+        store.openCursor().onsuccess = e => {
+            const cursor = event.target.result;
+            if (cursor) {
+                if (cursor.value.user === storeUser) {
+                    request = cursor.delete();
+                    request.onsuccess = () => console.log("Deleted existing");
+                }
+                cursor.continue();
+            } else {
+                dbResolve();
+            }
+        };
+        await dbPromise;
+    }
+    dbPromise = new Promise(r => { dbResolve = r; });
+    request = store.add({ id: Date.now(), user: storeUser, data: historyData });
+    request.onsuccess = () => {
+        console.log("Saved");
+        dbResolve();
+    };
+    await dbPromise;
+}
+
+async function getHistory() {
+    const storeUser = user || "web_user";
+    let db;
+    let dbResolve;
+    let valid = true;
+    let dbPromise = new Promise(r => { dbResolve = r; });
+    let request = window.indexedDB.open("nethackPlayback", 1);
+    request.onerror = e => {
+        valid = false;
+        console.error(e);
+    };
+    request.onupgradeneeded = e => {
+        valid = false;
+    }
+    request.onsuccess = e => {
+        db = e.target.result;
+        dbResolve();
+    }
+    await dbPromise;
+    if (!valid) {
+        return "";
+    }
+    const store = db.transaction(["nethackPlayback"], "readonly").objectStore("nethackPlayback");
+    const historyData = [];
+    dbPromise = new Promise(r => { dbResolve = r; });
+    store.openCursor().onsuccess = e => {
+        const cursor = event.target.result;
+        if (cursor) {
+            if (cursor.value.user === storeUser) {
+                historyData.push(cursor.value);
+            }
+            cursor.continue();
+        } else {
+            dbResolve();
+        }
+    };
+    await dbPromise;
+    return historyData.sort((a, b) => a.id - b.id).reduce((prev, current) => prev + current.data, "");
+}
+
+async function download() {
+    const text = isNewGame ? historyData : await getHistory() + historyData;
+    const name = "nethack-playback.ndjson";
+    const a = document.createElement("a");
+    const file = new Blob([text], {type: "text/plain"});
+    a.href = URL.createObjectURL(file);
+    a.download = name;
+    a.style.display = 'none';
+    footer.appendChild(a);
+    a.click();
+    footer.removeChild(a);
+}
 
   </script>
 </html>

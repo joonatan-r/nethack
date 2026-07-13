@@ -1,6 +1,8 @@
 
 Nethack browser port. Content under "wasm" got by compiling Nethack 5.0.0 (https://github.com/NetHack/NetHack/tree/NetHack-5.0) (at commit 186d9524de4c7bae696f6fcd8cfed44933d7b33e) with unix and CROSS_TO_WASM. The only small modification is in files.c according to files.c.diff as a hack to make saving work.
 
+Saving and returning to game is supported. (Warning: closing without saving deletes the run)
+
 ### Playing on mobile
 
 The game's mobile interface is available on https://joonatan-r.github.io/nethack/. The game is installable as a PWA by adding it to home screen, allowing it to be played on fullscreen.
@@ -16,8 +18,8 @@ Mobile-specific features:
     - Dialogs can be minimized and brought back using a floating button
 - Menu dialog for extended commands (can also just be written or use the shortcuts)
 - Quick access redo button that also remembers the number of actions
-- Saving and returning to game (Warning: closing without saving deletes the run)
 - Button for saving custom nethack configuration options
+- Button for downloading a playback of the current game (all sessions) (experimental, https://joonatan-r.github.io/nethack-player used for viewing)
 
 ### Playing on desktop
 
