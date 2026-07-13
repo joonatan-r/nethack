@@ -160,7 +160,7 @@ if (storedNethackOpts && !nethackOptions) {
     nethackOptions = storedNethackOpts;
 }
 
-let playbackOff = localStorage.getItem("nethackPlaybackOff");
+let playbackOn = localStorage.getItem("nethackPlaybackOn");
 let mobileKbOn = false;
 let shift = false;
 let ctrl = false;
@@ -694,7 +694,7 @@ async function callback(name, ...args) {
             clearMap();
             newMsg(args[0], true);
             // even though auto sync is on, sync for the callback to ensure done
-            if (!playbackOff) {
+            if (playbackOn) {
                 await storeHistory();
             }
             storedFS.syncfs(false, err => {
@@ -1353,7 +1353,7 @@ function closeDialogIfEmpty() {
 }
 
 function createMobileControls() {
-    const chars = ['Kb', 'Ext', 'Redo', 'OPTS', 'DL', 'PbOff'];
+    const chars = ['Kb', 'Ext', 'Redo', 'OPTS', 'DL', 'PbOn'];
     footer.innerHTML = "";
     footer.style.flexDirection = "row";
     for (const char of chars) {
@@ -1368,7 +1368,7 @@ function createMobileControls() {
         el.style.aspectRatio = "1 / 1";
         el.style.border = "1px solid lightgray";
         el.style.backgroundColor = "black";
-        el.innerHTML = (char === 'PbOff' && playbackOff) ? 'PbOn' : char;
+        el.innerHTML = (char === 'PbOn' && playbackOn) ? 'PbOff' : char;
         el.onclick = e => {
             e.stopPropagation();
             e.stopImmediatePropagation();
@@ -1398,10 +1398,10 @@ function createMobileControls() {
                 }
             } else if (char === 'DL') {
                 download();
-            } else if (char === 'PbOff') {
-                localStorage.setItem('nethackPlaybackOff', playbackOff ? '' : 'true');
-                playbackOff = !playbackOff;
-                document.getElementById('mobileControl-PbOff').innerHTML = playbackOff ? 'PbOn' : 'PbOff';
+            } else if (char === 'PbOn') {
+                localStorage.setItem('nethackPlaybackOn', playbackOn ? '' : 'true');
+                playbackOn = !playbackOn;
+                document.getElementById('mobileControl-PbOn').innerHTML = playbackOn ? 'PbOff' : 'PbOn';
             }
         };
         footer.appendChild(el);
