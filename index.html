@@ -2219,7 +2219,7 @@ let dlPart;
 async function download() {
     if (!downloadParts) {
         const text = isNewGame ? historyData : await getHistory() + historyData;
-        downloadParts = chunkStr(text, 5000000);
+        downloadParts = chunkStr(text, 50000000);
         dlPart = 0;
         document.getElementById('mobileControl-DL').innerHTML = `DL (${downloadParts.length})`;
         return;
