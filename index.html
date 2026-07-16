@@ -780,7 +780,7 @@ function updateStatus(args) {
         }
     }
     for (const field of Object.keys(statusMap)) {
-        if (field === "Hunger" && statusMap[field]) {
+        if ((field === "Hunger" || field === "Cap") && statusMap[field]) {
             status.innerHTML += `${field}: <span style="color:orange">${statusMap[field]} </span>`;
         } else {
             status.innerHTML += `${field}: ${statusMap[field] || "-"} `;
