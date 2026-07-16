@@ -49,7 +49,7 @@
             border: 1px solid lightgray;
             overflow: auto;
             overscroll-behavior: contain;
-            font-size: 10px;
+            font-size: 12px;
             z-index: 2;
         }
         #footerMsg {
@@ -780,11 +780,15 @@ function updateStatus(args) {
         }
     }
     for (const field of Object.keys(statusMap)) {
-        status.innerHTML += `${field}: ${statusMap[field] || "-"} `;
+        if (field === "Hunger" && statusMap[field]) {
+            status.innerHTML += `${field}: <span style="color:orange">${statusMap[field]} </span>`;
+        } else {
+            status.innerHTML += `${field}: ${statusMap[field] || "-"} `;
+        }
     }
     for (const cond of Object.keys(condsMap)) {
         if (condsMap[cond]) {
-            status.innerHTML += `${cond} `;
+            status.innerHTML += `<span style="color:orange">${cond} </span>`;
         }
     }
     if (statusMap["Hpmax"]) {
@@ -1628,6 +1632,9 @@ function handleKey(inputKey, ctrlKey, metaKey, numPad) {
                 inputResolve(1);
             } else if (inputKey === 'Escape') {
                 inputResolve(-1);
+            } else if (inputKey === 'Backspace') {
+                cmdInput = cmdInput.slice(0, -1);
+                msg.innerHTML = cmdInput;
             } else if (inputKey.length === 1) {
                 cmdInput += inputKey;
                 // NOTE: history should already be handled
