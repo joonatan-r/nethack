@@ -322,6 +322,8 @@ if (mobile) {
     footer.style.display = "none";
     dialog.style.display = "none";
     floatBtn.style.display = "none";
+    document.body.style.backgroundColor = "black";
+    root.style.border = "1px solid white";
     document.onkeydown = e => handleKey(e.key, e.ctrlKey, e.altKey, e.location === 3);
 }
 
