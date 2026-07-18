@@ -7,7 +7,7 @@ Saving and returning to game is supported. (Warning: closing without saving dele
 
 The game's mobile interface is available on https://joonatan-r.github.io/nethack/. The game is installable as a PWA by adding it to home screen, allowing it to be played on fullscreen.
 
-Mobile-specific features:
+Features:
 - Zoomable and pannable (including menus)
 - Moving by tapping in the direction, running by holding press, travelling to a square by panning and holding at the location
 - "Smart" actions by tapping the character (looting, going up/down stairs, picking something up, or just looking)
@@ -18,13 +18,14 @@ Mobile-specific features:
     - Dialogs can be minimized and brought back using a floating button
 - Menu dialog for extended commands (can also just be written or use the shortcuts)
 - Quick access redo button that also remembers the number of actions
-- Button for saving custom nethack configuration options
-- Button for downloading a playback of the current game (all sessions) (experimental, https://joonatan-r.github.io/nethack-player used for viewing)
-    - Can be turned off by clicking the "PbOff" button, and back on by clicking the "PbOn" (only checked on save)
+- Button for saving custom nethack configuration options (to override previously set ones without setting anything, can input a space, for example)
+- Button for downloading a playback of the current game (including all its sessions, https://joonatan-r.github.io/nethack-player or https://joonatan-r.github.io/nethack-player#pc used for viewing)
+    - Can be turned on by clicking the "PbOn" button, and back off by clicking the "PbOff". This option is only checked when saving and affects only the saving of previous sessions (the current one can always be downloaded, but may not work properly if option was previously on and later set off).
+    - Longer games can get split into multiple files. First press prepares the file(s), and subsequent presses download.
 
 ### Playing on desktop
 
-The game's desktop interface is available on https://joonatan-r.github.io/nethack/#pc. This is less refined compared to the mobile interface, but should function similarly to traditional Nethack. Some shortcuts are a bit funky due to also being actions on the browser.
+The game's desktop interface is available on https://joonatan-r.github.io/nethack/#pc. This should function similarly to traditional Nethack. Some shortcuts are a bit funky due to also being actions on the browser, one workaround is to include an extra modifier key (for example Ctrl + Alt + D to kick without triggering the browser's Ctrl + D shortcut). Buttons for saving options and playback are available, similar to the mobile interface.
 
 ### Additional options
 

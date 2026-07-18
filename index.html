@@ -346,6 +346,30 @@ if (mobile) {
     menuContainer.style.display = "flex";
     menuContainer.style.flexDirection = "column";
     document.onkeydown = e => handleKey(e.key, e.ctrlKey, e.altKey, e.location === 3);
+    // TODO clean these
+    const pcOpts = document.createElement("button");
+    pcOpts.innerHTML = "OPTS";
+    pcOpts.style.position = "absolute";
+    pcOpts.style.left = "10px";
+    pcOpts.style.bottom = "10px";
+    pcOpts.onclick = promptOptions;
+    const pcDl = document.createElement("button");
+    pcDl.id = "mobileControl-DL";
+    pcDl.innerHTML = "DL";
+    pcDl.style.position = "absolute";
+    pcDl.style.left = "60px";
+    pcDl.style.bottom = "10px";
+    pcDl.onclick = download;
+    const pcPbOn = document.createElement("button");
+    pcPbOn.id = "mobileControl-PbOn";
+    pcPbOn.innerHTML = playbackOn ? "PbOff" : "PbOn";
+    pcPbOn.style.position = "absolute";
+    pcPbOn.style.left = "115px";
+    pcPbOn.style.bottom = "10px";
+    pcPbOn.onclick = togglePbOn;
+    document.body.appendChild(pcOpts);
+    document.body.appendChild(pcDl);
+    document.body.appendChild(pcPbOn);
 }
 
 for (let i = 0; i < rowno; i++) {
@@ -1402,6 +1426,20 @@ function closeDialogIfEmpty() {
     }
 }
 
+function promptOptions() {
+    const newOpts =
+        prompt('Give new nethack configuration options to be saved (as "OPTIONS=...")', nethackOptions);
+    if (newOpts) {
+        localStorage.setItem('nethackOptions', newOpts);
+    }
+}
+
+function togglePbOn() {
+    localStorage.setItem('nethackPlaybackOn', playbackOn ? '' : 'true');
+    playbackOn = !playbackOn;
+    document.getElementById('mobileControl-PbOn').innerHTML = playbackOn ? 'PbOff' : 'PbOn';
+}
+
 function createMobileControls() {
     const chars = ['Kb', 'Ext', 'Redo', 'OPTS', 'DL', 'PbOn'];
     footer.innerHTML = "";
@@ -1442,16 +1480,11 @@ function createMobileControls() {
                     }
                 }
             } else if (char === 'OPTS') {
-                const newOpts = prompt('Give new nethack configuration options to be saved (as "OPTIONS=...")');
-                if (newOpts) {
-                    localStorage.setItem('nethackOptions', newOpts);
-                }
+                promptOptions();
             } else if (char === 'DL') {
                 download();
             } else if (char === 'PbOn') {
-                localStorage.setItem('nethackPlaybackOn', playbackOn ? '' : 'true');
-                playbackOn = !playbackOn;
-                document.getElementById('mobileControl-PbOn').innerHTML = playbackOn ? 'PbOff' : 'PbOn';
+                togglePbOn();
             }
         };
         footer.appendChild(el);
